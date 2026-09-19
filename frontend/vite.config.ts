@@ -4,7 +4,9 @@ import { defineConfig, loadEnv } from 'vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = { ...process.env, ...loadEnv(mode, process.cwd(), ''), ...loadEnv(mode, '..', '') }
-  const hmrClientPort = env.VITE_HMR_CLIENT_PORT || env.HMR_CLIENT_PORT
+  const rawHmrPort = env.VITE_HMR_CLIENT_PORT || env.HMR_CLIENT_PORT
+  const parsedHmrPort = rawHmrPort ? Number.parseInt(rawHmrPort, 10) : NaN
+  const isValidHmrPort = !Number.isNaN(parsedHmrPort) && parsedHmrPort > 0
 
   return {
     plugins: [react()],
@@ -14,8 +16,9 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: true,
       },
-      ...(hmrClientPort ? { hmr: { clientPort: parseInt(hmrClientPort, 10) } } : {}),
+      ...(isValidHmrPort ? { hmr: { clientPort: parsedHmrPort } } : {}),
     },
   }
 })
+
 
