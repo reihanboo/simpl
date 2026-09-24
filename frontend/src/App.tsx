@@ -10,6 +10,7 @@ import ProfilePage from './pages/dashboard/profile';
 import DashboardLayout from './components/layout/DashboardLayout';
 import DashboardIndex from './pages/dashboard/index';
 import { GuestRoute } from './components/GuestRoute';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css';
 
 function LandingPage() {
@@ -549,10 +550,12 @@ export default function App() {
         <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
-      <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/dashboard" element={<DashboardLayout />}>
-        <Route index element={<DashboardIndex />} />
-        {/* Other dashboard routes will go here */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashboardIndex />} />
+          {/* Other dashboard routes will go here */}
+        </Route>
       </Route>
     </Routes>
   );
