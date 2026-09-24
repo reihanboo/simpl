@@ -182,16 +182,12 @@ export default function LoginPage() {
                   />
                   <span>Ingat Saya</span>
                 </label>
-                <a
-                  href="#forgot"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    alert('Silakan hubungi administrator sistem atau pemilik bisnis Anda untuk reset password.');
-                  }}
+                <Link
+                  to="/auth/forgot-password"
                   className="font-semibold text-[#21AC3A] hover:underline cursor-pointer"
                 >
                   Lupa Password?
-                </a>
+                </Link>
               </div>
 
               {/* Submit Button */}

@@ -4,6 +4,8 @@ import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, Zap, Shield, Crown, TrendingUp, Package, Users, BarChart3, Database, Check, X, Calculator, PiggyBank, Plus, Minus, Store } from 'lucide-react';
 import LoginPage from './pages/auth/login';
 import RegisterPage from './pages/auth/register';
+import ForgotPasswordPage from './pages/auth/forgot-password';
+import ResetPasswordPage from './pages/auth/reset-password';
 import './App.css';
 
 function LandingPage() {
@@ -543,6 +545,8 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/register" element={<RegisterPage />} />
+      <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/pages/auth/login.tsx" element={<LoginPage />} />
     </Routes>
   );
