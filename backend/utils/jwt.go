@@ -40,9 +40,16 @@ func GenerateToken(userID uuid.UUID) (string, error) {
 
 func ValidateToken(tokenString string) (*Claims, error) {
 	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return nil, errors.New("JWT_SECRET is not set")
+	}
 	
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		// Ensure token algorithm is what we expect
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
 		return []byte(jwtSecret), nil
 	})
 
