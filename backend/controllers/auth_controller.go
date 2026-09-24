@@ -187,6 +187,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	if !user.IsVerified {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Akun belum diverifikasi. Silakan periksa email Anda untuk OTP."})
+		return
+	}
+
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
