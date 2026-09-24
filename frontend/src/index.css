@@ -2,11 +2,11 @@
 
 @layer base {
   :root {
-    --zapier-orange: #21AC3A;
-    --zapier-orange-hover: #1B9331;
-    --zapier-bg: #FFFFFF;
-    --zapier-card-bg: #F7F5F2;
-    --zapier-dark: #131313;
+    --simpl-green: #21AC3A;
+    --simpl-green-hover: #1B9331;
+    --simpl-bg: #FFFFFF;
+    --simpl-card-bg: #F7F5F2;
+    --simpl-dark: #131313;
   }
 
   body {
