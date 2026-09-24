@@ -195,16 +195,12 @@ export default function LoginPage() {
             {/* Bottom Register Prompt */}
             <div className="mt-8 pt-6 border-t border-slate-100 text-center text-xs text-slate-500">
               Belum memiliki akun bisnis?{' '}
-              <a
-                href="#pricing"
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate('/#pricing');
-                }}
+              <Link
+                to="/auth/register"
                 className="font-bold text-[#21AC3A] hover:underline cursor-pointer"
               >
                 Pilih Paket & Daftar Sekarang
-              </a>
+              </Link>
             </div>
           </div>
         </div>

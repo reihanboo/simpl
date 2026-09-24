@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, Zap, Shield, Crown, TrendingUp, Package, Users, BarChart3, Database, Check, X, Calculator, PiggyBank, Plus, Minus, Store } from 'lucide-react';
 import LoginPage from './pages/auth/login';
+import RegisterPage from './pages/auth/register';
 import './App.css';
 
 function LandingPage() {
@@ -541,6 +542,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth/login" element={<LoginPage />} />
+      <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/pages/auth/login.tsx" element={<LoginPage />} />
     </Routes>
   );
