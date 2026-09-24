@@ -17,6 +17,12 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: true,
       },
+      proxy: {
+        '/api': {
+          target: 'http://backend:8080',
+          changeOrigin: true,
+        },
+      },
       ...(isValidHmrPort ? { hmr: { clientPort: parsedHmrPort } } : {}),
     },
   }

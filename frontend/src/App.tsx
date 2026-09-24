@@ -1,9 +1,19 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Routes, Route, Link } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, Zap, Shield, Crown, TrendingUp, Package, Users, BarChart3, Database, Check, X, Calculator, PiggyBank, Plus, Minus, Store } from 'lucide-react';
+import LoginPage from './pages/auth/login';
+import RegisterPage from './pages/auth/register';
+import ForgotPasswordPage from './pages/auth/forgot-password';
+import ResetPasswordPage from './pages/auth/reset-password';
+import ProfilePage from './pages/dashboard/profile';
+import DashboardLayout from './components/layout/DashboardLayout';
+import DashboardIndex from './pages/dashboard/index';
+import { GuestRoute } from './components/GuestRoute';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import './App.css';
 
-export default function App() {
+function LandingPage() {
   const [calcPlan, setCalcPlan] = useState<'umkm' | 'enterprise'>('umkm');
   const [calcOutlets, setCalcOutlets] = useState<number>(1);
   const [calcDuration, setCalcDuration] = useState<number>(12);
@@ -18,7 +28,6 @@ export default function App() {
   const formatIDR = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
-
 
   const umkmFeatures = [
     { icon: <Package className="w-5 h-5 text-[#21AC3A]" />, text: "Kasir Digital: Transaksi Instan, Stok Otomatis Terpotong" },
@@ -106,9 +115,12 @@ export default function App() {
           >
             <a href="#perbandingan" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors hidden md:block cursor-pointer">Perbandingan</a>
             <a href="#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors hidden md:block cursor-pointer">Harga</a>
-            <button className="text-sm font-semibold px-5 py-2.5 rounded-lg text-white bg-[#21AC3A] hover:bg-[#1d9732] transition-colors active:scale-95 cursor-pointer">
+            <Link
+              to="/auth/login"
+              className="text-sm font-semibold px-5 py-2.5 rounded-lg text-white bg-[#21AC3A] hover:bg-[#1d9732] transition-colors active:scale-95 cursor-pointer inline-block"
+            >
               Masuk
-            </button>
+            </Link>
           </motion.div>
         </div>
       </nav>
@@ -358,11 +370,10 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setCalcPlan('umkm')}
-                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${
-                        calcPlan === 'umkm'
-                          ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
+                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${calcPlan === 'umkm'
+                        ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        }`}
                     >
                       <span>Paket UMKM</span>
                       <span className="text-xs font-normal text-slate-500">Rp 29rb/bln</span>
@@ -371,11 +382,10 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setCalcPlan('enterprise')}
-                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${
-                        calcPlan === 'enterprise'
-                          ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
+                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${calcPlan === 'enterprise'
+                        ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        }`}
                     >
                       <span>Enterprise</span>
                       <span className="text-xs font-normal text-slate-500">Rp 149rb/bln</span>
@@ -425,11 +435,10 @@ export default function App() {
                         key={d.months}
                         type="button"
                         onClick={() => setCalcDuration(d.months)}
-                        className={`py-2.5 px-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center ${
-                          calcDuration === d.months
-                            ? 'border-[#21AC3A] bg-[#21AC3A] text-white'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                        }`}
+                        className={`py-2.5 px-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center ${calcDuration === d.months
+                          ? 'border-[#21AC3A] bg-[#21AC3A] text-white'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                          }`}
                       >
                         {d.label}
                       </button>
@@ -530,3 +539,25 @@ export default function App() {
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <Routes>
+      <Route element={<GuestRoute />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/auth/login" element={<LoginPage />} />
+        <Route path="/auth/register" element={<RegisterPage />} />
+        <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+      </Route>
+      <Route element={<ProtectedRoute />}>
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashboardIndex />} />
+          {/* Other dashboard routes will go here */}
+        </Route>
+      </Route>
+    </Routes>
+  );
+}
+
