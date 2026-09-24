@@ -7,6 +7,8 @@ import RegisterPage from './pages/auth/register';
 import ForgotPasswordPage from './pages/auth/forgot-password';
 import ResetPasswordPage from './pages/auth/reset-password';
 import ProfilePage from './pages/dashboard/profile';
+import DashboardLayout from './components/layout/DashboardLayout';
+import DashboardIndex from './pages/dashboard/index';
 import { GuestRoute } from './components/GuestRoute';
 import './App.css';
 
@@ -548,6 +550,10 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route index element={<DashboardIndex />} />
+        {/* Other dashboard routes will go here */}
+      </Route>
     </Routes>
   );
 }
