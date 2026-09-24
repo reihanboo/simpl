@@ -17,6 +17,7 @@ type User struct {
 	RequiresPasswordChange bool       `gorm:"default:false" json:"requires_password_change"`
 	OTPCode                *string    `gorm:"type:varchar(6)" json:"-"`
 	OTPExpiresAt           *time.Time `json:"-"`
+	OTPAttempts            int        `gorm:"default:0" json:"-"`
 	ResetPasswordToken     *string    `gorm:"type:varchar(255)" json:"-"`
 	ResetPasswordExpiresAt *time.Time `json:"-"`
 	CreatedAt              time.Time  `json:"created_at"`

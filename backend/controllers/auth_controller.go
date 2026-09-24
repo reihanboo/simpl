@@ -64,6 +64,7 @@ func Register(c *gin.Context) {
 		PasswordHash: string(hashedPassword),
 		OTPCode:      &otpCode,
 		OTPExpiresAt: &expiresAt,
+		OTPAttempts:  0,
 		IsVerified:   false,
 	}
 
@@ -136,13 +137,20 @@ func VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	if user.OTPCode == nil || *user.OTPCode != input.OTPCode {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP code"})
+	if user.OTPExpiresAt == nil || user.OTPExpiresAt.Before(time.Now()) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP has expired"})
 		return
 	}
 
-	if user.OTPExpiresAt == nil || user.OTPExpiresAt.Before(time.Now()) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP has expired"})
+	if user.OTPAttempts >= 5 {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many failed attempts. Please request a new OTP."})
+		return
+	}
+
+	if user.OTPCode == nil || *user.OTPCode != input.OTPCode {
+		user.OTPAttempts++
+		config.DB.Save(&user)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP code"})
 		return
 	}
 
@@ -150,6 +158,7 @@ func VerifyOTP(c *gin.Context) {
 	user.IsVerified = true
 	user.OTPCode = nil
 	user.OTPExpiresAt = nil
+	user.OTPAttempts = 0
 
 	if err := config.DB.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user"})
