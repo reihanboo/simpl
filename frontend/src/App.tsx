@@ -7,10 +7,10 @@ import RegisterPage from './pages/auth/register';
 import ForgotPasswordPage from './pages/auth/forgot-password';
 import ResetPasswordPage from './pages/auth/reset-password';
 import ProfilePage from './pages/dashboard/profile';
+import { GuestRoute } from './components/GuestRoute';
 import './App.css';
 
 function LandingPage() {
-  const navigate = useNavigate();
   const [calcPlan, setCalcPlan] = useState<'umkm' | 'enterprise'>('umkm');
   const [calcOutlets, setCalcOutlets] = useState<number>(1);
   const [calcDuration, setCalcDuration] = useState<number>(12);
@@ -367,11 +367,10 @@ function LandingPage() {
                     <button
                       type="button"
                       onClick={() => setCalcPlan('umkm')}
-                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${
-                        calcPlan === 'umkm'
+                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${calcPlan === 'umkm'
                           ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
                           : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
+                        }`}
                     >
                       <span>Paket UMKM</span>
                       <span className="text-xs font-normal text-slate-500">Rp 29rb/bln</span>
@@ -380,11 +379,10 @@ function LandingPage() {
                     <button
                       type="button"
                       onClick={() => setCalcPlan('enterprise')}
-                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${
-                        calcPlan === 'enterprise'
+                      className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${calcPlan === 'enterprise'
                           ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
                           : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
+                        }`}
                     >
                       <span>Enterprise</span>
                       <span className="text-xs font-normal text-slate-500">Rp 149rb/bln</span>
@@ -434,11 +432,10 @@ function LandingPage() {
                         key={d.months}
                         type="button"
                         onClick={() => setCalcDuration(d.months)}
-                        className={`py-2.5 px-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center ${
-                          calcDuration === d.months
+                        className={`py-2.5 px-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center ${calcDuration === d.months
                             ? 'border-[#21AC3A] bg-[#21AC3A] text-white'
                             : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                        }`}
+                          }`}
                       >
                         {d.label}
                       </button>
@@ -543,13 +540,14 @@ function LandingPage() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/auth/login" element={<LoginPage />} />
-      <Route path="/auth/register" element={<RegisterPage />} />
-      <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route element={<GuestRoute />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/auth/login" element={<LoginPage />} />
+        <Route path="/auth/register" element={<RegisterPage />} />
+        <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+      </Route>
       <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/pages/auth/login.tsx" element={<LoginPage />} />
     </Routes>
   );
 }
