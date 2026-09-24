@@ -45,6 +45,12 @@ func main() {
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.Me)
 			auth.PUT("/me", middlewares.AuthMiddleware(), controllers.UpdateProfile)
 		}
+
+		business := api.Group("/business")
+		business.Use(middlewares.AuthMiddleware())
+		{
+			business.POST("", controllers.CreateBusiness)
+		}
 	}
 
 	log.Printf("Backend server starting with Gin on port %s...", port)
