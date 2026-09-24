@@ -20,15 +20,34 @@ func ConnectDB() {
 	dbname := os.Getenv("DB_NAME")
 	port := os.Getenv("DB_PORT")
 
+	// 1. First connect to the default "postgres" database to create our target database if it doesn't exist
+	defaultDsn := fmt.Sprintf("host=%s user=%s password=%s dbname=postgres port=%s sslmode=disable TimeZone=Asia/Jakarta",
+		host, user, password, port)
+	
+	defaultDb, err := gorm.Open(postgres.Open(defaultDsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to postgres server: %v", err)
+	}
+
+	var count int64
+	defaultDb.Raw("SELECT count(*) FROM pg_database WHERE datname = ?", dbname).Scan(&count)
+	if count == 0 {
+		log.Printf("Database %s does not exist. Creating it now...", dbname)
+		defaultDb.Exec(fmt.Sprintf("CREATE DATABASE %s;", dbname))
+	} else {
+		log.Printf("Database %s already exists.", dbname)
+	}
+
+	// 2. Now connect to the actual target database
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
 		host, user, password, dbname, port)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to database %s: %v", dbname, err)
 	}
 
-	// Auto Migrate
+	// Auto Migrate (Creates tables if they do not exist)
 	err = db.AutoMigrate(&models.User{})
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)

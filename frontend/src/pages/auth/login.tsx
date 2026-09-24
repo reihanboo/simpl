@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -28,12 +28,31 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    // Simulate authentication API call matching backend users schema
-    setTimeout(() => {
-      setIsLoading(false);
-      // Mock successful login redirection
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ identity, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Login gagal. Silakan coba lagi.');
+      }
+
+      // Save token to localStorage (or session storage)
+      localStorage.setItem('token', data.token);
+      
+      // Redirect to dashboard
       navigate('/dashboard');
-    }, 1200);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

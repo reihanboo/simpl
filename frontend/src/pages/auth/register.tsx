@@ -14,7 +14,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -25,12 +25,34 @@ export default function RegisterPage() {
 
     setIsLoading(true);
 
-    // Simulate registration API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Match the backend RegisterInput struct
+        body: JSON.stringify({ 
+          username: name,
+          email, 
+          phone, 
+          password 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Pendaftaran gagal. Silakan coba lagi.');
+      }
+
       // Mock successful registration redirection
       navigate('/auth/login');
-    }, 1200);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
