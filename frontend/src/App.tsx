@@ -523,7 +523,7 @@ export default function App() {
             <img src="/simpl-logo-dark.png" alt="SIMPL Logo" className="h-6 object-contain" />
           </div>
           <p className="text-slate-500 text-sm">
-            © {new Date().getFullYear()} Scaleable Integrated Management System. Seluruh hak cipta dilindungi.
+            © {new Date().getFullYear()} Scalable Integrated Management System. Seluruh hak cipta dilindungi.
           </p>
         </div>
       </footer>
