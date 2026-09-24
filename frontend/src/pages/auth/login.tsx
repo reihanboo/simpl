@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Zap } from 'lucide-react';
@@ -11,6 +11,14 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    const savedIdentity = localStorage.getItem('remembered_identity');
+    if (savedIdentity) {
+      setIdentity(savedIdentity);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,8 +51,13 @@ export default function LoginPage() {
         throw new Error(data.error || 'Login gagal. Silakan coba lagi.');
       }
 
-      // Save token to localStorage (or session storage)
-      localStorage.setItem('token', data.token);
+      if (rememberMe) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('remembered_identity', identity);
+      } else {
+        sessionStorage.setItem('token', data.token);
+        localStorage.removeItem('remembered_identity');
+      }
       
       // Redirect to dashboard
       navigate('/dashboard');

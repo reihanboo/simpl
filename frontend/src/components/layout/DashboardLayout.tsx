@@ -22,6 +22,7 @@ export default function DashboardLayout() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     navigate('/auth/login');
   };
 
@@ -33,7 +34,7 @@ export default function DashboardLayout() {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const res = await fetch('/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`
