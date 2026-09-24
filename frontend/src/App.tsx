@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, Zap, Shield, Crown, TrendingUp, Package, Users, BarChart3, Database, Check, X, Calculator, PiggyBank, Plus, Minus, Store } from 'lucide-react';
 import LoginPage from './pages/auth/login';
 import RegisterPage from './pages/auth/register';
@@ -371,8 +371,8 @@ function LandingPage() {
                       type="button"
                       onClick={() => setCalcPlan('umkm')}
                       className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${calcPlan === 'umkm'
-                          ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                         }`}
                     >
                       <span>Paket UMKM</span>
@@ -383,8 +383,8 @@ function LandingPage() {
                       type="button"
                       onClick={() => setCalcPlan('enterprise')}
                       className={`py-3 px-4 rounded-lg border text-sm font-bold transition-all cursor-pointer flex items-center justify-between ${calcPlan === 'enterprise'
-                          ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        ? 'border-[#21AC3A] bg-[#21AC3A]/10 text-[#21AC3A]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                         }`}
                     >
                       <span>Enterprise</span>
@@ -436,8 +436,8 @@ function LandingPage() {
                         type="button"
                         onClick={() => setCalcDuration(d.months)}
                         className={`py-2.5 px-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all cursor-pointer text-center ${calcDuration === d.months
-                            ? 'border-[#21AC3A] bg-[#21AC3A] text-white'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                          ? 'border-[#21AC3A] bg-[#21AC3A] text-white'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                           }`}
                       >
                         {d.label}
