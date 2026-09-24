@@ -58,7 +58,7 @@ export default function DashboardIndex() {
 
           {/* Filters */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors w-full sm:w-auto">
+            <button className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors w-full sm:w-auto cursor-pointer">
               <div className="flex items-center gap-1.5">
                 <ChevronDown className="w-4 h-4 text-slate-400" />
                 <span>Urutkan berdasarkan nama</span>
@@ -72,13 +72,13 @@ export default function DashboardIndex() {
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <Grid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <List className="w-4 h-4" />
             </button>
@@ -99,7 +99,7 @@ export default function DashboardIndex() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1 }}
-            className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow relative group flex flex-col min-h-[160px]"
+            className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow relative group flex flex-col min-h-[160px] cursor-pointer"
           >
             <div className="flex justify-between items-start mb-4">
               <div>

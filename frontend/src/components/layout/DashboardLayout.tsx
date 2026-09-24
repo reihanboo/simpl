@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
   Bell,
@@ -7,13 +7,50 @@ import {
   Building2,
   ChevronsUpDown,
   Check,
-  Plus
+  Plus,
+  Settings,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function DashboardLayout() {
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/auth/login');
+  };
+
+  const handleSettings = () => {
+    setIsProfileDropdownOpen(false);
+    navigate('/profile');
+  };
+
+  React.useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser({ name: data.user.username, email: data.user.email });
+        } else {
+          console.error('Failed to fetch user:', res.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching user data from backend:', error);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const organizations = [
     { id: '1', name: "Sate Padang Dodi", plan: 'UMKM' },
@@ -135,8 +172,51 @@ export default function DashboardLayout() {
               <Bell className="w-5 h-5" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </button>
-            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#21AC3A] to-emerald-400 text-white flex items-center justify-center font-bold text-sm cursor-pointer border-2 border-white shadow-sm ring-1 ring-slate-200">
-              A
+            <div className="relative">
+              <button
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#21AC3A] to-emerald-400 text-white flex items-center justify-center font-bold text-sm cursor-pointer border-2 border-white shadow-sm ring-1 ring-slate-200"
+              >
+                {user ? user.name.charAt(0).toUpperCase() : ''}
+              </button>
+
+              <AnimatePresence>
+                {isProfileDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsProfileDropdownOpen(false)}></div>
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/50 z-50 overflow-hidden"
+                    >
+                      <div className="px-4 py-3 border-b border-slate-100">
+                        <p className="text-sm font-medium text-slate-900">{user?.name || 'Loading...'}</p>
+                        <p className="text-xs text-slate-500 truncate">{user?.email || ''}</p>
+                      </div>
+                      <div className="p-1">
+                        <button
+                          onClick={handleSettings}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors text-left cursor-pointer"
+                        >
+                          <Settings className="w-4 h-4 text-slate-400" />
+                          <span>Pengaturan</span>
+                        </button>
+                      </div>
+                      <div className="border-t border-slate-100 p-1">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4 text-red-400" />
+                          <span>Keluar</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
