@@ -43,6 +43,7 @@ func main() {
 			auth.POST("/forgot-password", controllers.ForgotPassword)
 			auth.POST("/reset-password", controllers.ResetPassword)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.Me)
+			auth.PUT("/me", middlewares.AuthMiddleware(), controllers.UpdateProfile)
 		}
 	}
 

@@ -329,3 +329,57 @@ func Me(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
+
+type UpdateProfileInput struct {
+	Username string `json:"username" binding:"omitempty,min=3"`
+	Email    string `json:"email" binding:"omitempty,email"`
+	Phone    string `json:"phone" binding:"omitempty"`
+}
+
+func UpdateProfile(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	var input UpdateProfileInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if input.Email != "" && input.Email != user.Email {
+		var existing models.User
+		if err := config.DB.Where("email = ?", input.Email).First(&existing).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+			return
+		}
+		user.Email = input.Email
+	}
+
+	if input.Username != "" && input.Username != user.Username {
+		var existing models.User
+		if err := config.DB.Where("username = ?", input.Username).First(&existing).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+			return
+		}
+		user.Username = input.Username
+	}
+
+	if input.Phone != "" {
+		user.Phone = input.Phone
+	}
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		return
+	}
+
+	// Fetch updated user to return
+	var updatedUser models.User
+	config.DB.Select("id", "username", "email", "phone", "requires_password_change", "created_at", "updated_at").First(&updatedUser, "id = ?", userID)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Profile successfully updated", "user": updatedUser})
+}

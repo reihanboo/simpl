@@ -6,6 +6,7 @@ import LoginPage from './pages/auth/login';
 import RegisterPage from './pages/auth/register';
 import ForgotPasswordPage from './pages/auth/forgot-password';
 import ResetPasswordPage from './pages/auth/reset-password';
+import ProfilePage from './pages/dashboard/profile';
 import './App.css';
 
 function LandingPage() {
@@ -547,6 +548,7 @@ export default function App() {
       <Route path="/auth/register" element={<RegisterPage />} />
       <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/pages/auth/login.tsx" element={<LoginPage />} />
     </Routes>
   );
