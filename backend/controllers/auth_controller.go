@@ -1,13 +1,19 @@
 package controllers
 
 import (
+	"fmt"
+	"log"
+	"math/rand"
 	"net/http"
+	"os"
+	"time"
 
 	"backend/config"
 	"backend/models"
 	"backend/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/resend/resend-go/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -39,12 +45,19 @@ func Register(c *gin.Context) {
 		return
 	}
 
+	// Generate OTP
+	otpCode := fmt.Sprintf("%06d", rand.Intn(1000000))
+	expiresAt := time.Now().Add(10 * time.Minute)
+
 	// Create user
 	user := models.User{
 		Username:     input.Username,
 		Email:        input.Email,
 		Phone:        input.Phone,
 		PasswordHash: string(hashedPassword),
+		OTPCode:      &otpCode,
+		OTPExpiresAt: &expiresAt,
+		IsVerified:   false,
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
@@ -52,8 +65,82 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+	// Send OTP via Resend
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	if resendAPIKey != "" {
+		client := resend.NewClient(resendAPIKey)
+		params := &resend.SendEmailRequest{
+			From:    "onboarding@resend.dev", // Free Resend accounts can only send from this to verified emails
+			To:      []string{user.Email},
+			Subject: "Kode Verifikasi SIMPL Anda",
+			Html:    fmt.Sprintf("<strong>Kode OTP Anda adalah: %s</strong><br>Berlaku selama 10 menit.", otpCode),
+		}
+		_, err = client.Emails.Send(params)
+		if err != nil {
+			log.Printf("Failed to send email to %s: %v", user.Email, err)
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "User registered, OTP sent to email"})
 }
+
+type VerifyOTPInput struct {
+	Email   string `json:"email" binding:"required,email"`
+	OTPCode string `json:"otp_code" binding:"required,len=6"`
+}
+
+func VerifyOTP(c *gin.Context) {
+	var input VerifyOTPInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if user.IsVerified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User is already verified"})
+		return
+	}
+
+	if user.OTPCode == nil || *user.OTPCode != input.OTPCode {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP code"})
+		return
+	}
+
+	if user.OTPExpiresAt == nil || user.OTPExpiresAt.Before(time.Now()) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP has expired"})
+		return
+	}
+
+	// OTP is valid
+	user.IsVerified = true
+	user.OTPCode = nil
+	user.OTPExpiresAt = nil
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user"})
+		return
+	}
+
+	// Optionally log them in immediately
+	token, err := utils.GenerateToken(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Verified but failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User successfully verified",
+		"token":   token,
+		"user_id": user.ID,
+	})
+}
+
 
 type LoginInput struct {
 	Identity string `json:"identity" binding:"required"` // Can be email or username

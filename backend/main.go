@@ -38,6 +38,7 @@ func main() {
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", controllers.Register)
+			auth.POST("/verify-otp", controllers.VerifyOTP)
 			auth.POST("/login", controllers.Login)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.Me)
 		}
