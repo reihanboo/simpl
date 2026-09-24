@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, Zap, Shield, Crown, TrendingUp, Package, Users, BarChart3, Database, Check, X, Calculator, PiggyBank, Plus, Minus, Store } from 'lucide-react';
+import LoginPage from './pages/auth/login';
 import './App.css';
 
-export default function App() {
+function LandingPage() {
+  const navigate = useNavigate();
   const [calcPlan, setCalcPlan] = useState<'umkm' | 'enterprise'>('umkm');
   const [calcOutlets, setCalcOutlets] = useState<number>(1);
   const [calcDuration, setCalcDuration] = useState<number>(12);
@@ -18,7 +21,6 @@ export default function App() {
   const formatIDR = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
-
 
   const umkmFeatures = [
     { icon: <Package className="w-5 h-5 text-[#21AC3A]" />, text: "Kasir Digital: Transaksi Instan, Stok Otomatis Terpotong" },
@@ -106,9 +108,12 @@ export default function App() {
           >
             <a href="#perbandingan" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors hidden md:block cursor-pointer">Perbandingan</a>
             <a href="#pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors hidden md:block cursor-pointer">Harga</a>
-            <button className="text-sm font-semibold px-5 py-2.5 rounded-lg text-white bg-[#21AC3A] hover:bg-[#1d9732] transition-colors active:scale-95 cursor-pointer">
+            <Link
+              to="/auth/login"
+              className="text-sm font-semibold px-5 py-2.5 rounded-lg text-white bg-[#21AC3A] hover:bg-[#1d9732] transition-colors active:scale-95 cursor-pointer inline-block"
+            >
               Masuk
-            </button>
+            </Link>
           </motion.div>
         </div>
       </nav>
@@ -530,3 +535,14 @@ export default function App() {
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/auth/login" element={<LoginPage />} />
+      <Route path="/pages/auth/login.tsx" element={<LoginPage />} />
+    </Routes>
+  );
+}
+
