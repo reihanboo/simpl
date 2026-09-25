@@ -14,9 +14,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
-  // OTP States
-  const [isOtpStep, setIsOtpStep] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
+  // (Removed inline OTP states, now using dedicated verify-otp page)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,50 +48,9 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Pendaftaran gagal. Silakan coba lagi.');
       }
 
-      // Move to OTP step instead of redirecting
-      setIsOtpStep(true);
+      // Move to separate OTP step
+      navigate(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
       setErrorMessage('');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-
-    if (!otpCode || otpCode.length !== 6) {
-      setErrorMessage('Masukkan 6 digit kode OTP yang valid.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          email,
-          otp_code: otpCode 
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Verifikasi gagal. Pastikan kode OTP benar.');
-      }
-
-      // Automatically login user using the returned token
-      localStorage.setItem('token', data.token);
-      
-      // Redirect to dashboard
-      navigate('/dashboard');
     } catch (err: any) {
       setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
     } finally {
@@ -154,64 +111,7 @@ export default function RegisterPage() {
 
           {/* Right Column: Dynamic Form (Registration or OTP) */}
           <div className="col-span-12 md:col-span-7 p-6 sm:p-8 lg:p-12 flex flex-col justify-center">
-            {isOtpStep ? (
-              // --- OTP VERIFICATION STEP ---
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="w-full"
-              >
-                <div className="mb-8">
-                  <h1 className="text-2xl font-bold text-slate-900 mb-2">Verifikasi Email</h1>
-                  <p className="text-slate-500 text-sm">
-                    Kami telah mengirimkan 6-digit kode OTP ke <strong>{email}</strong>.
-                  </p>
-                </div>
-
-                {errorMessage && (
-                  <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
-                    {errorMessage}
-                  </div>
-                )}
-
-                <form onSubmit={handleVerifyOtp} className="space-y-6">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                      Kode Verifikasi (OTP)
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder="000000"
-                      className="w-full text-center tracking-[0.5em] text-2xl py-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || otpCode.length !== 6}
-                    className="w-full bg-[#21AC3A] hover:bg-[#1b8c2f] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex justify-center items-center h-[52px]"
-                  >
-                    {isLoading ? (
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                        className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
-                      />
-                    ) : (
-                      <span>Verifikasi & Masuk</span>
-                    )}
-                  </button>
-                  
-                  <div className="text-center text-xs text-slate-500 pt-4 cursor-pointer hover:text-[#21AC3A]" onClick={() => setIsOtpStep(false)}>
-                    Kembali
-                  </div>
-                </form>
-              </motion.div>
-            ) : (
-              // --- REGISTRATION STEP ---
+              {/* --- REGISTRATION STEP --- */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -365,7 +265,6 @@ export default function RegisterPage() {
               </Link>
             </div>
             </motion.div>
-            )}
           </div>
         </div>
       </main>

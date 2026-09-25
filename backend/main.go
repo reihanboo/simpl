@@ -39,6 +39,7 @@ func main() {
 		{
 			auth.POST("/register", controllers.Register)
 			auth.POST("/verify-otp", controllers.VerifyOTP)
+			auth.POST("/resend-otp", controllers.ResendOTP)
 			auth.POST("/login", controllers.Login)
 			auth.POST("/forgot-password", controllers.ForgotPassword)
 			auth.POST("/reset-password", controllers.ResetPassword)
