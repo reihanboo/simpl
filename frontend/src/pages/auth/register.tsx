@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Zap, Mail, Phone, Briefcase } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Zap, Mail, Phone } from 'lucide-react';
+import { isValidIndonesianMobilePhone } from '../../utils/phone';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [businessName, setBusinessName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -20,8 +20,12 @@ export default function RegisterPage() {
     e.preventDefault();
     setErrorMessage('');
 
-    if (!name.trim() || !email.trim() || !password || !phone.trim() || !businessName.trim()) {
+    if (!name.trim() || !email.trim() || !password || !phone.trim()) {
       setErrorMessage('Silakan lengkapi semua field yang wajib diisi.');
+      return;
+    }
+    if (!isValidIndonesianMobilePhone(phone)) {
+      setErrorMessage('Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.');
       return;
     }
 
@@ -120,7 +124,7 @@ export default function RegisterPage() {
                 <div className="mb-8">
                   <h1 className="text-2xl font-bold text-slate-900 mb-2">Daftar Akun Baru</h1>
                   <p className="text-slate-500 text-sm">
-                    Isi data di bawah ini untuk membuat akun bisnis SIMPL Anda.
+                    Isi data di bawah ini untuk membuat akun SIMPL Anda. Bisnis dapat dibuat nanti melalui dashboard.
                   </p>
                 </div>
 
@@ -183,6 +187,8 @@ export default function RegisterPage() {
                         </div>
                         <input
                           type="tel"
+                          required
+                          inputMode="tel"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           placeholder="08xxxxxxxxxx"
@@ -190,28 +196,9 @@ export default function RegisterPage() {
                         />
                       </div>
                     </div>
-
-                    {/* Business Name Input */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                        Nama Bisnis
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                          <Briefcase className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="text"
-                          value={businessName}
-                          onChange={(e) => setBusinessName(e.target.value)}
-                          placeholder="Toko Anda"
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                        />
                   </div>
-                </div>
-              </div>
 
-              {/* Password Input */}
+                  {/* Password Input */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   Password

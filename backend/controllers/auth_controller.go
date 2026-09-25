@@ -22,7 +22,7 @@ import (
 type RegisterInput struct {
 	Username string `json:"username" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
-	Phone    string `json:"phone"`
+	Phone    string `json:"phone" binding:"required"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
@@ -30,6 +30,10 @@ func Register(c *gin.Context) {
 	var input RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.RespondBindError(c, err)
+		return
+	}
+	if !utils.IsValidIndonesianMobilePhone(input.Phone) {
+		utils.RespondError(c, http.StatusBadRequest, "Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.")
 		return
 	}
 
@@ -445,6 +449,10 @@ func UpdateProfile(c *gin.Context) {
 	var input UpdateProfileInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.RespondBindError(c, err)
+		return
+	}
+	if input.Phone != "" && !utils.IsValidIndonesianMobilePhone(input.Phone) {
+		utils.RespondError(c, http.StatusBadRequest, "Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.")
 		return
 	}
 
