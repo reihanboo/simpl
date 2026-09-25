@@ -8,6 +8,7 @@ import (
 	"backend/config"
 	"backend/controllers"
 	"backend/middlewares"
+	"backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -25,7 +26,15 @@ func main() {
 	// Connect to Database
 	config.ConnectDB()
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Logger(), middlewares.ErrorRecovery())
+	r.NoRoute(func(c *gin.Context) {
+		utils.RespondError(c, http.StatusNotFound, "Endpoint yang Anda cari tidak ditemukan.")
+	})
+	r.NoMethod(func(c *gin.Context) {
+		utils.RespondError(c, http.StatusMethodNotAllowed, "Metode permintaan ini tidak didukung untuk endpoint tersebut.")
+	})
+	r.HandleMethodNotAllowed = true
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -39,6 +48,7 @@ func main() {
 		{
 			auth.POST("/register", controllers.Register)
 			auth.POST("/verify-otp", controllers.VerifyOTP)
+			auth.POST("/resend-otp", controllers.ResendOTP)
 			auth.POST("/login", controllers.Login)
 			auth.POST("/forgot-password", controllers.ForgotPassword)
 			auth.POST("/reset-password", controllers.ResetPassword)

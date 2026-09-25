@@ -29,28 +29,28 @@ type RegisterInput struct {
 func Register(c *gin.Context) {
 	var input RegisterInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
 	// Check if email or username already exists
 	var existingUser models.User
 	if err := config.DB.Where("email = ? OR username = ?", input.Email, input.Username).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Email or Username already taken"})
+		utils.RespondError(c, http.StatusConflict, "Email atau nama pengguna sudah digunakan.")
 		return
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi tidak dapat diproses. Silakan coba lagi.")
 		return
 	}
 
 	// Generate OTP
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate OTP"})
+		utils.RespondError(c, http.StatusInternalServerError, "Kode verifikasi tidak dapat dibuat. Silakan coba lagi.")
 		return
 	}
 	otpCode := fmt.Sprintf("%06d", n.Int64())
@@ -69,7 +69,7 @@ func Register(c *gin.Context) {
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		utils.RespondError(c, http.StatusInternalServerError, "Akun belum dapat dibuat. Silakan coba lagi.")
 		return
 	}
 
@@ -116,41 +116,41 @@ func Register(c *gin.Context) {
 
 type VerifyOTPInput struct {
 	Email   string `json:"email" binding:"required,email"`
-	OTPCode string `json:"otp_code" binding:"required,len=6"`
+	OTPCode string `json:"otp_code" binding:"required,len=6,numeric"`
 }
 
 func VerifyOTP(c *gin.Context) {
 	var input VerifyOTPInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
 	var user models.User
 	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		utils.RespondError(c, http.StatusNotFound, "Akun dengan email tersebut tidak ditemukan.")
 		return
 	}
 
 	if user.IsVerified {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "User is already verified"})
+		utils.RespondError(c, http.StatusBadRequest, "Akun Anda sudah terverifikasi.")
 		return
 	}
 
 	if user.OTPExpiresAt == nil || user.OTPExpiresAt.Before(time.Now()) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "OTP has expired"})
+		utils.RespondError(c, http.StatusUnauthorized, "Kode OTP sudah kedaluwarsa. Minta kode baru untuk melanjutkan.")
 		return
 	}
 
 	if user.OTPAttempts >= 5 {
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many failed attempts. Please request a new OTP."})
+		utils.RespondError(c, http.StatusTooManyRequests, "Terlalu banyak percobaan. Silakan minta kode OTP baru.")
 		return
 	}
 
 	if user.OTPCode == nil || *user.OTPCode != input.OTPCode {
 		user.OTPAttempts++
 		config.DB.Save(&user)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid OTP code"})
+		utils.RespondError(c, http.StatusUnauthorized, "Kode OTP tidak sesuai. Periksa kembali kode yang Anda masukkan.")
 		return
 	}
 
@@ -161,14 +161,14 @@ func VerifyOTP(c *gin.Context) {
 	user.OTPAttempts = 0
 
 	if err := config.DB.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user"})
+		utils.RespondError(c, http.StatusInternalServerError, "Verifikasi akun belum berhasil. Silakan coba lagi.")
 		return
 	}
 
 	// Optionally log them in immediately
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Verified but failed to generate token"})
+		utils.RespondError(c, http.StatusInternalServerError, "Akun terverifikasi, tetapi sesi tidak dapat dibuat. Silakan masuk.")
 		return
 	}
 
@@ -179,6 +179,87 @@ func VerifyOTP(c *gin.Context) {
 	})
 }
 
+type ResendOTPInput struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+func ResendOTP(c *gin.Context) {
+	var input ResendOTPInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondBindError(c, err)
+		return
+	}
+
+	var user models.User
+	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Akun dengan email tersebut tidak ditemukan.")
+		return
+	}
+
+	if user.IsVerified {
+		utils.RespondError(c, http.StatusBadRequest, "Akun Anda sudah terverifikasi.")
+		return
+	}
+
+	// Generate new OTP
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Kode verifikasi tidak dapat dibuat. Silakan coba lagi.")
+		return
+	}
+	otpCode := fmt.Sprintf("%06d", n.Int64())
+	expiresAt := time.Now().Add(10 * time.Minute)
+
+	user.OTPCode = &otpCode
+	user.OTPExpiresAt = &expiresAt
+	user.OTPAttempts = 0
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Kode verifikasi belum dapat diperbarui. Silakan coba lagi.")
+		return
+	}
+
+	// Send OTP via Resend
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	if resendAPIKey != "" {
+		client := resend.NewClient(resendAPIKey)
+		htmlBody := fmt.Sprintf(`
+			<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+				<div style="text-align: center; margin-bottom: 30px;">
+					<h1 style="color: #21AC3A; font-size: 28px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">SIMPL</h1>
+					<p style="color: #64748b; font-size: 12px; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Enterprise Platform</p>
+				</div>
+				<p style="color: #334155; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+					Terima kasih telah menggunakan layanan SIMPL. Kami mengirimkan ulang kode OTP untuk akun <a href="mailto:%s" style="color: #21AC3A; text-decoration: none; font-weight: 600;">%s</a>.
+				</p>
+				<p style="color: #334155; font-size: 15px; line-height: 1.6; margin-bottom: 30px;">
+					Untuk melanjutkan proses, gunakan 6 angka berikut untuk autentikasi akun Anda:
+				</p>
+				<div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; padding: 24px; text-align: center; margin: 30px 0; border-radius: 8px;">
+					<span style="font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #0f172a;">%s</span>
+				</div>
+				<p style="color: #64748b; font-size: 13px; margin-top: 40px; text-align: center; line-height: 1.5;">
+					Mohon jangan berikan kode ini kepada siapa pun. Kode ini akan kedaluwarsa dalam <strong>10 menit</strong>.<br>
+					Jika Anda tidak melakukan aktivitas ini, abaikan email ini.
+				</p>
+			</div>
+		`, user.Email, user.Email, otpCode)
+
+		params := &resend.SendEmailRequest{
+			From:    "onboarding@resend.dev",
+			To:      []string{user.Email},
+			Subject: "Kode Autentikasi SIMPL Anda (Kirim Ulang)",
+			Html:    htmlBody,
+		}
+		_, err = client.Emails.Send(params)
+		if err != nil {
+			log.Printf("Failed to resend email to %s: %v", user.Email, err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "New OTP sent to email"})
+}
+
 type LoginInput struct {
 	Identity string `json:"identity" binding:"required"` // Can be email or username
 	Password string `json:"password" binding:"required"`
@@ -187,29 +268,32 @@ type LoginInput struct {
 func Login(c *gin.Context) {
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
 	var user models.User
 	if err := config.DB.Where("email = ? OR username = ?", input.Identity, input.Identity).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		utils.RespondError(c, http.StatusUnauthorized, "Email/nama pengguna atau kata sandi tidak sesuai.")
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		utils.RespondError(c, http.StatusUnauthorized, "Email/nama pengguna atau kata sandi tidak sesuai.")
 		return
 	}
 
 	if !user.IsVerified {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Akun belum diverifikasi. Silakan periksa email Anda untuk OTP."})
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Akun Anda belum terverifikasi. Periksa email untuk kode OTP.",
+			"email": user.Email,
+		})
 		return
 	}
 
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		utils.RespondError(c, http.StatusInternalServerError, "Sesi masuk tidak dapat dibuat. Silakan coba lagi.")
 		return
 	}
 
@@ -227,7 +311,7 @@ type ForgotPasswordInput struct {
 func ForgotPassword(c *gin.Context) {
 	var input ForgotPasswordInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
@@ -245,7 +329,7 @@ func ForgotPassword(c *gin.Context) {
 	user.ResetPasswordToken = &resetToken
 	user.ResetPasswordExpiresAt = &expiresAt
 	if err := config.DB.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate reset token"})
+		utils.RespondError(c, http.StatusInternalServerError, "Permintaan atur ulang kata sandi belum dapat diproses. Silakan coba lagi.")
 		return
 	}
 
@@ -304,24 +388,24 @@ type ResetPasswordInput struct {
 func ResetPassword(c *gin.Context) {
 	var input ResetPasswordInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
 	var user models.User
 	if err := config.DB.Where("reset_password_token = ?", input.Token).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired reset token"})
+		utils.RespondError(c, http.StatusUnauthorized, "Tautan atur ulang kata sandi tidak valid atau sudah kedaluwarsa.")
 		return
 	}
 
 	if user.ResetPasswordExpiresAt == nil || user.ResetPasswordExpiresAt.Before(time.Now()) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Reset token has expired"})
+		utils.RespondError(c, http.StatusUnauthorized, "Tautan atur ulang kata sandi sudah kedaluwarsa. Minta tautan baru.")
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi tidak dapat diproses. Silakan coba lagi.")
 		return
 	}
 
@@ -329,9 +413,9 @@ func ResetPassword(c *gin.Context) {
 	user.ResetPasswordToken = nil
 	user.ResetPasswordExpiresAt = nil
 	user.RequiresPasswordChange = false // clear this in case it was set
-	
+
 	if err := config.DB.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset password"})
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi belum berhasil diubah. Silakan coba lagi.")
 		return
 	}
 
@@ -343,7 +427,7 @@ func Me(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	var user models.User
 	if err := config.DB.Select("id", "username", "email", "phone", "requires_password_change", "created_at", "updated_at").First(&user, "id = ?", userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		utils.RespondError(c, http.StatusNotFound, "Akun tidak ditemukan.")
 		return
 	}
 
@@ -360,20 +444,20 @@ func UpdateProfile(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	var input UpdateProfileInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
 	var user models.User
 	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		utils.RespondError(c, http.StatusNotFound, "Akun tidak ditemukan.")
 		return
 	}
 
 	if input.Email != "" && input.Email != user.Email {
 		var existing models.User
 		if err := config.DB.Where("email = ?", input.Email).First(&existing).Error; err == nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Email already in use"})
+			utils.RespondError(c, http.StatusConflict, "Email tersebut sudah digunakan oleh akun lain.")
 			return
 		}
 		user.Email = input.Email
@@ -382,7 +466,7 @@ func UpdateProfile(c *gin.Context) {
 	if input.Username != "" && input.Username != user.Username {
 		var existing models.User
 		if err := config.DB.Where("username = ?", input.Username).First(&existing).Error; err == nil {
-			c.JSON(http.StatusConflict, gin.H{"error": "Username already taken"})
+			utils.RespondError(c, http.StatusConflict, "Nama pengguna tersebut sudah digunakan.")
 			return
 		}
 		user.Username = input.Username
@@ -393,7 +477,7 @@ func UpdateProfile(c *gin.Context) {
 	}
 
 	if err := config.DB.Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update profile"})
+		utils.RespondError(c, http.StatusInternalServerError, "Profil belum berhasil diperbarui. Silakan coba lagi.")
 		return
 	}
 
