@@ -67,6 +67,17 @@ func CreateBusiness(c *gin.Context) {
 		return
 	}
 
+	// Automatically create the first branch
+	branch := models.Branch{
+		BusinessID: business.ID,
+		Name:       "Cabang Utama",
+		Address:    input.Address,
+	}
+	if err := config.DB.Create(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat cabang utama. Silakan coba lagi.")
+		return
+	}
+
 	// Generate unique Order ID for Midtrans
 	orderID := fmt.Sprintf("SUB-%s-%d", business.ID.String()[:8], time.Now().Unix())
 
@@ -136,5 +147,45 @@ func CreateBusiness(c *gin.Context) {
 		"message":    "Business created",
 		"business":   business,
 		"snap_token": snapToken,
+	})
+}
+
+func GetBusinesses(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var businesses []models.Business
+	if err := config.DB.Where("owner_id = ?", userID).Find(&businesses).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch businesses"})
+		return
+	}
+
+	// We'll create a structured response to match what the frontend expects
+	type BusinessResponse struct {
+		ID           uuid.UUID            `json:"id"`
+		Name         string               `json:"name"`
+		Address      string               `json:"address"`
+		Subscription *models.Subscription `json:"subscription"`
+	}
+
+	var response []BusinessResponse
+	for _, b := range businesses {
+		// Find subscription manually if Preload fails, but Preload should work if the schema is right
+		var sub models.Subscription
+		config.DB.Where("business_id = ?", b.ID).First(&sub)
+
+		response = append(response, BusinessResponse{
+			ID:           b.ID,
+			Name:         b.Name,
+			Address:      b.Address,
+			Subscription: &sub, // include subscription details for frontend
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"businesses": response,
 	})
 }

@@ -60,6 +60,16 @@ func main() {
 		business.Use(middlewares.AuthMiddleware())
 		{
 			business.POST("", controllers.CreateBusiness)
+			business.GET("", controllers.GetBusinesses)
+		}
+		
+		branch := api.Group("/branches")
+		branch.Use(middlewares.AuthMiddleware())
+		{
+			branch.POST("", controllers.CreateBranch)
+			branch.GET("", controllers.GetBranches)
+			branch.PUT("/:id", controllers.UpdateBranch)
+			branch.DELETE("/:id", controllers.DeleteBranch)
 		}
 	}
 
