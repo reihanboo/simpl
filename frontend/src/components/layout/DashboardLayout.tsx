@@ -109,7 +109,10 @@ export default function DashboardLayout() {
   };
 
   const getBreadcrumbs = () => {
-    const paths = location.pathname.split('/').filter(Boolean);
+    const rawPaths = location.pathname.split('/').filter(Boolean);
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    const paths = rawPaths.filter(p => !uuidRegex.test(p));
+    
     return paths.map((path, index) => {
       const isLast = index === paths.length - 1;
       const formattedName = path.charAt(0).toUpperCase() + path.slice(1).replace('-', ' ');
@@ -136,7 +139,7 @@ export default function DashboardLayout() {
             </div>
 
             {/* Organization Selector */}
-            {location.pathname !== '/dashboard/business/new' && (
+            {!location.pathname.startsWith('/dashboard/business/new') && !location.pathname.startsWith('/dashboard/branch/') && (
               <div className="relative ml-4 border-l border-slate-200 pl-4">
                 {activeOrg ? (
                   <button

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { Map, Marker } from 'pigeon-maps';
 import {
   Search,
@@ -23,6 +23,7 @@ import {
 
 export default function DashboardIndex() {
   const { activeOrg } = useOutletContext<{ activeOrg: any }>();
+  const navigate = useNavigate();
   const [branches, setBranches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -206,7 +207,7 @@ export default function DashboardIndex() {
         {isPending && (
           <div className="mt-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
             <Lock className="w-5 h-5 shrink-0 text-amber-600" />
-            <span className="text-sm">Status langganan bisnis ini sedang <strong>tertunda</strong>. Harap lunasi pembayaran untuk.</span>
+            <span className="text-sm">Status langganan bisnis ini sedang <strong>tertunda</strong>. Harap lunasi pembayaran untuk melanjutkan.</span>
           </div>
         )}
       </div>
@@ -284,6 +285,11 @@ export default function DashboardIndex() {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.1 }}
+              onClick={() => {
+                if (!isPending) {
+                  navigate(`/dashboard/branch/${branch.id}`);
+                }
+              }}
               className={`bg-white border border-slate-200 rounded-xl p-5 relative flex flex-col min-h-[160px] transition-all ${isPending ? 'opacity-60 cursor-not-allowed pointer-events-none' : 'hover:shadow-md group cursor-pointer'}`}
             >
               <div className="flex justify-between items-start mb-4">
