@@ -69,6 +69,7 @@ func main() {
 			branch.POST("", controllers.CreateBranch)
 			branch.GET("", controllers.GetBranches)
 			branch.PUT("/:id", controllers.UpdateBranch)
+			branch.DELETE("/:id", controllers.DeleteBranch)
 		}
 	}
 

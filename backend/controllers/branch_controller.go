@@ -102,3 +102,26 @@ func UpdateBranch(c *gin.Context) {
 		"message": "Cabang berhasil diperbarui",
 	})
 }
+
+func DeleteBranch(c *gin.Context) {
+	branchID := c.Param("id")
+	if branchID == "" {
+		utils.RespondError(c, http.StatusBadRequest, "ID cabang diperlukan.")
+		return
+	}
+
+	var branch models.Branch
+	if err := config.DB.Where("id = ?", branchID).First(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan.")
+		return
+	}
+
+	if err := config.DB.Delete(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal menghapus cabang.")
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Cabang berhasil dihapus",
+	})
+}

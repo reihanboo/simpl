@@ -176,6 +176,28 @@ export default function DashboardIndex() {
     setOpenMenuId(null);
   };
 
+  const handleDeleteBranch = async (branchId: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus cabang ini?')) return;
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const res = await fetch(`/api/branches/${branchId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        setBranches(prev => prev.filter(b => b.id !== branchId));
+      } else {
+        console.error("Failed to delete branch");
+        alert("Gagal menghapus cabang.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat menghapus cabang.");
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -307,7 +329,7 @@ export default function DashboardIndex() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenMenuId(null);
-                            alert('Fitur hapus segera hadir');
+                            handleDeleteBranch(branch.id);
                           }}
                           className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left cursor-pointer"
                         >
