@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useOutletContext } from 'react-router-dom';
 import {
   Search,
   ChevronDown,
@@ -9,7 +10,8 @@ import {
   MoreVertical,
   MapPin,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Lock
 } from 'lucide-react';
 
 const mockBranches = [
@@ -35,12 +37,20 @@ const mockBranches = [
 
 export default function DashboardIndex() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const { activeOrg } = useOutletContext<any>();
+  const isPending = activeOrg?.status === 'pending';
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Cabang</h1>
+        {isPending && (
+          <div className="mt-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
+            <Lock className="w-5 h-5 shrink-0 text-amber-600" />
+            <span className="text-sm">Status langganan bisnis ini sedang <strong>tertunda</strong>. Harap lunasi pembayaran untuk.</span>
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -84,7 +94,14 @@ export default function DashboardIndex() {
             </button>
           </div>
 
-          <button className="flex items-center gap-1.5 bg-[#21AC3A] hover:bg-[#1d9732] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm cursor-pointer">
+          <button
+            disabled={isPending}
+            title={isPending ? "Langganan tertunda" : ""}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm ${isPending
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-[#21AC3A] hover:bg-[#1d9732] text-white cursor-pointer'
+              }`}
+          >
             <Plus className="w-4 h-4" />
             <span>Cabang Baru</span>
           </button>
