@@ -50,6 +50,7 @@ func main() {
 		business.Use(middlewares.AuthMiddleware())
 		{
 			business.POST("", controllers.CreateBusiness)
+			business.GET("", controllers.GetBusinesses)
 		}
 	}
 
