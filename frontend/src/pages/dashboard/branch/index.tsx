@@ -87,8 +87,9 @@ export default function BranchDashboard() {
     <div className="flex h-full -mx-4 sm:-mx-6 lg:-mx-8 -my-4 sm:-my-6 lg:-my-8">
       {id && <Sidebar branchId={id} />}
 
-      <div className="flex-1 max-w-7xl mx-auto space-y-6 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-        {/* Header */}
+      <div className="flex-1 overflow-y-auto bg-slate-50/50">
+        <div className="max-w-7xl mx-auto space-y-6 p-4 sm:p-6 lg:p-8">
+          {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -204,6 +205,7 @@ export default function BranchDashboard() {
               ))}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
