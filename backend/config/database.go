@@ -48,7 +48,11 @@ func ConnectDB() {
 	}
 
 	// Auto Migrate (Creates tables if they do not exist)
-	err = db.AutoMigrate(&models.User{})
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Business{},
+		&models.Subscription{},
+	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)
 	}

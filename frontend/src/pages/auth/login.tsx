@@ -48,6 +48,10 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 403 && data.email) {
+          navigate(`/auth/verify-otp?email=${encodeURIComponent(data.email)}`);
+          return;
+        }
         throw new Error(data.error || 'Login gagal. Silakan coba lagi.');
       }
 

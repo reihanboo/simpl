@@ -9,8 +9,10 @@ import ResetPasswordPage from './pages/auth/reset-password';
 import ProfilePage from './pages/dashboard/profile';
 import DashboardLayout from './components/layout/DashboardLayout';
 import DashboardIndex from './pages/dashboard/index';
+import NewBusinessPage from './pages/dashboard/business/new';
 import { GuestRoute } from './components/GuestRoute';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import VerifyOtpPage from './pages/auth/verify-otp';
 import './App.css';
 
 function LandingPage() {
@@ -547,6 +549,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/register" element={<RegisterPage />} />
+        <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
@@ -554,6 +557,7 @@ export default function App() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardIndex />} />
+          <Route path="business/new" element={<NewBusinessPage />} />
           {/* Other dashboard routes will go here */}
         </Route>
       </Route>
