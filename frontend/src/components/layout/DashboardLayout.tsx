@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronRight,
   Bell,
@@ -111,16 +111,33 @@ export default function DashboardLayout() {
   const getBreadcrumbs = () => {
     const rawPaths = location.pathname.split('/').filter(Boolean);
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    const paths = rawPaths.filter(p => !uuidRegex.test(p));
     
-    return paths.map((path, index) => {
-      const isLast = index === paths.length - 1;
-      const formattedName = path.charAt(0).toUpperCase() + path.slice(1).replace('-', ' ');
+    const breadcrumbs: { name: string, path: string }[] = [];
+    let currentPath = '';
+
+    rawPaths.forEach((pathSegment) => {
+      currentPath += `/${pathSegment}`;
+      if (!uuidRegex.test(pathSegment)) {
+        breadcrumbs.push({
+          name: pathSegment.charAt(0).toUpperCase() + pathSegment.slice(1).replace('-', ' '),
+          path: currentPath
+        });
+      }
+    });
+
+    return breadcrumbs.map((crumb, index) => {
+      const isLast = index === breadcrumbs.length - 1;
       return (
-        <React.Fragment key={path}>
-          <span className={isLast ? "text-slate-900 font-semibold" : "text-slate-500"}>
-            {formattedName}
-          </span>
+        <React.Fragment key={crumb.path}>
+          {isLast ? (
+            <span className="text-slate-900 font-semibold">
+              {crumb.name}
+            </span>
+          ) : (
+            <Link to={crumb.path} className="text-slate-500 hover:text-[#21AC3A] transition-colors">
+              {crumb.name}
+            </Link>
+          )}
           {!isLast && <ChevronRight className="w-4 h-4 text-slate-400 mx-1" />}
         </React.Fragment>
       );
