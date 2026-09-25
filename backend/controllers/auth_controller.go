@@ -179,6 +179,87 @@ func VerifyOTP(c *gin.Context) {
 	})
 }
 
+type ResendOTPInput struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+func ResendOTP(c *gin.Context) {
+	var input ResendOTPInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if user.IsVerified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "User is already verified"})
+		return
+	}
+
+	// Generate new OTP
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate OTP"})
+		return
+	}
+	otpCode := fmt.Sprintf("%06d", n.Int64())
+	expiresAt := time.Now().Add(10 * time.Minute)
+
+	user.OTPCode = &otpCode
+	user.OTPExpiresAt = &expiresAt
+	user.OTPAttempts = 0
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update OTP"})
+		return
+	}
+
+	// Send OTP via Resend
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	if resendAPIKey != "" {
+		client := resend.NewClient(resendAPIKey)
+		htmlBody := fmt.Sprintf(`
+			<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+				<div style="text-align: center; margin-bottom: 30px;">
+					<h1 style="color: #21AC3A; font-size: 28px; margin: 0; font-weight: 800; letter-spacing: -0.5px;">SIMPL</h1>
+					<p style="color: #64748b; font-size: 12px; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px;">Enterprise Platform</p>
+				</div>
+				<p style="color: #334155; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+					Terima kasih telah menggunakan layanan SIMPL. Kami mengirimkan ulang kode OTP untuk akun <a href="mailto:%s" style="color: #21AC3A; text-decoration: none; font-weight: 600;">%s</a>.
+				</p>
+				<p style="color: #334155; font-size: 15px; line-height: 1.6; margin-bottom: 30px;">
+					Untuk melanjutkan proses, gunakan 6 angka berikut untuk autentikasi akun Anda:
+				</p>
+				<div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; padding: 24px; text-align: center; margin: 30px 0; border-radius: 8px;">
+					<span style="font-size: 36px; font-weight: 800; letter-spacing: 12px; color: #0f172a;">%s</span>
+				</div>
+				<p style="color: #64748b; font-size: 13px; margin-top: 40px; text-align: center; line-height: 1.5;">
+					Mohon jangan berikan kode ini kepada siapa pun. Kode ini akan kedaluwarsa dalam <strong>10 menit</strong>.<br>
+					Jika Anda tidak melakukan aktivitas ini, abaikan email ini.
+				</p>
+			</div>
+		`, user.Email, user.Email, otpCode)
+
+		params := &resend.SendEmailRequest{
+			From:    "onboarding@resend.dev",
+			To:      []string{user.Email},
+			Subject: "Kode Autentikasi SIMPL Anda (Kirim Ulang)",
+			Html:    htmlBody,
+		}
+		_, err = client.Emails.Send(params)
+		if err != nil {
+			log.Printf("Failed to resend email to %s: %v", user.Email, err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "New OTP sent to email"})
+}
+
 type LoginInput struct {
 	Identity string `json:"identity" binding:"required"` // Can be email or username
 	Password string `json:"password" binding:"required"`
@@ -203,7 +284,10 @@ func Login(c *gin.Context) {
 	}
 
 	if !user.IsVerified {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Akun belum diverifikasi. Silakan periksa email Anda untuk OTP."})
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Akun belum diverifikasi. Silakan periksa email Anda untuk OTP.",
+			"email": user.Email,
+		})
 		return
 	}
 

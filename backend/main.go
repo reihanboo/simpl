@@ -39,11 +39,18 @@ func main() {
 		{
 			auth.POST("/register", controllers.Register)
 			auth.POST("/verify-otp", controllers.VerifyOTP)
+			auth.POST("/resend-otp", controllers.ResendOTP)
 			auth.POST("/login", controllers.Login)
 			auth.POST("/forgot-password", controllers.ForgotPassword)
 			auth.POST("/reset-password", controllers.ResetPassword)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.Me)
 			auth.PUT("/me", middlewares.AuthMiddleware(), controllers.UpdateProfile)
+		}
+
+		business := api.Group("/business")
+		business.Use(middlewares.AuthMiddleware())
+		{
+			business.POST("", controllers.CreateBusiness)
 		}
 	}
 
