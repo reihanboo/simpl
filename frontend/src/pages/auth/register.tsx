@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Zap, Mail, Phone } from 'lucide-react';
+import { isValidIndonesianMobilePhone } from '../../utils/phone';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -21,6 +22,10 @@ export default function RegisterPage() {
 
     if (!name.trim() || !email.trim() || !password || !phone.trim()) {
       setErrorMessage('Silakan lengkapi semua field yang wajib diisi.');
+      return;
+    }
+    if (!isValidIndonesianMobilePhone(phone)) {
+      setErrorMessage('Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.');
       return;
     }
 
@@ -182,6 +187,8 @@ export default function RegisterPage() {
                         </div>
                         <input
                           type="tel"
+                          required
+                          inputMode="tel"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           placeholder="08xxxxxxxxxx"

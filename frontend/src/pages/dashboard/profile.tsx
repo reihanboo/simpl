@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, ArrowLeft, Save, LogOut } from 'lucide-react';
+import { isValidIndonesianMobilePhone } from '../../utils/phone';
 
 interface UserProfile {
   id: string;
@@ -69,6 +70,10 @@ export default function ProfilePage() {
     e.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
+    if (phone.trim() && !isValidIndonesianMobilePhone(phone)) {
+      setErrorMessage('Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.');
+      return;
+    }
     setIsSaving(true);
     
     const token = localStorage.getItem('token');
@@ -213,7 +218,8 @@ export default function ProfilePage() {
                   <Phone className="w-4 h-4" />
                 </div>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
