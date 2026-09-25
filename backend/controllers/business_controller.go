@@ -3,6 +3,7 @@ package controllers
 import (
 	"backend/config"
 	"backend/models"
+	"backend/utils"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -27,13 +28,13 @@ func CreateBusiness(c *gin.Context) {
 	// Get user from context (set by auth middleware)
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		utils.RespondError(c, http.StatusUnauthorized, "Sesi Anda tidak valid. Silakan masuk kembali.")
 		return
 	}
 
 	var input CreateBusinessInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		utils.RespondBindError(c, err)
 		return
 	}
 
@@ -44,7 +45,7 @@ func CreateBusiness(c *gin.Context) {
 	} else if input.Plan == "Enterprise" {
 		monthlyPrice = 149000
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid plan selected"})
+		utils.RespondError(c, http.StatusBadRequest, "Paket yang dipilih tidak tersedia. Pilih paket yang valid.")
 		return
 	}
 
@@ -62,7 +63,7 @@ func CreateBusiness(c *gin.Context) {
 	}
 
 	if err := config.DB.Create(&business).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create business"})
+		utils.RespondError(c, http.StatusInternalServerError, "Usaha belum dapat dibuat. Silakan coba lagi.")
 		return
 	}
 
@@ -103,7 +104,7 @@ func CreateBusiness(c *gin.Context) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	res, err := client.Do(req)
 	if err != nil || res.StatusCode != 201 {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to contact payment gateway"})
+		utils.RespondError(c, http.StatusInternalServerError, "Pembayaran belum dapat diproses. Silakan coba lagi.")
 		return
 	}
 	defer res.Body.Close()
@@ -114,7 +115,7 @@ func CreateBusiness(c *gin.Context) {
 
 	snapToken, ok := midtransRes["token"].(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get snap token"})
+		utils.RespondError(c, http.StatusInternalServerError, "Sesi pembayaran belum dapat dibuat. Silakan coba lagi.")
 		return
 	}
 
@@ -127,7 +128,7 @@ func CreateBusiness(c *gin.Context) {
 	}
 
 	if err := config.DB.Create(&subscription).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
+		utils.RespondError(c, http.StatusInternalServerError, "Langganan belum dapat dibuat. Silakan coba lagi.")
 		return
 	}
 
