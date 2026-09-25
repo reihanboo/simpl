@@ -52,6 +52,7 @@ func ConnectDB() {
 		&models.User{},
 		&models.Business{},
 		&models.Subscription{},
+		&models.Branch{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)

@@ -62,6 +62,14 @@ func main() {
 			business.POST("", controllers.CreateBusiness)
 			business.GET("", controllers.GetBusinesses)
 		}
+		
+		branch := api.Group("/branches")
+		branch.Use(middlewares.AuthMiddleware())
+		{
+			branch.POST("", controllers.CreateBranch)
+			branch.GET("", controllers.GetBranches)
+			branch.PUT("/:id", controllers.UpdateBranch)
+		}
 	}
 
 	log.Printf("Backend server starting with Gin on port %s...", port)

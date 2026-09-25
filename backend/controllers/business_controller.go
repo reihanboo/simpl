@@ -67,6 +67,17 @@ func CreateBusiness(c *gin.Context) {
 		return
 	}
 
+	// Automatically create the first branch
+	branch := models.Branch{
+		BusinessID: business.ID,
+		Name:       "Cabang Utama",
+		Address:    input.Address,
+	}
+	if err := config.DB.Create(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat cabang utama. Silakan coba lagi.")
+		return
+	}
+
 	// Generate unique Order ID for Midtrans
 	orderID := fmt.Sprintf("SUB-%s-%d", business.ID.String()[:8], time.Now().Unix())
 
