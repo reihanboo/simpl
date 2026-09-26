@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -15,11 +15,14 @@ import {
   PackageOpen,
   Loader2,
   FileText,
+  FileSpreadsheet,
+  ChevronDown,
   Activity
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 // Types
 interface OrderItem {
@@ -89,6 +92,16 @@ const formatDate = (dateStr: string) => {
   const d = new Date(dateStr);
   return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
+const printedAt = () => new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const todayStamp = () => new Date().toISOString().slice(0, 10);
+
+const saveExcel = (filename: string, sheetName: string, rows: (string | number)[][], cols: { wch: number }[]) => {
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet['!cols'] = cols;
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, filename);
+};
 
 export default function BranchReports() {
   const { id: branchId } = useParams();
@@ -113,6 +126,10 @@ export default function BranchReports() {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [movementLoading, setMovementLoading] = useState(true);
   const [movementSearch, setMovementSearch] = useState('');
+
+  // Export menu
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -197,6 +214,16 @@ export default function BranchReports() {
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, salesSearch, inventorySearch, inventoryFilter, movementSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Filtered data
   const filteredOrders = orders.filter(o =>
@@ -348,6 +375,102 @@ export default function BranchReports() {
     else exportMovementPDF();
   };
 
+  const exportSalesExcel = () => {
+    const rows: (string | number)[][] = [['Laporan Penjualan']];
+    const dateRange = startDate || endDate
+      ? `Periode: ${startDate || '...'} s/d ${endDate || '...'}`
+      : 'Semua Periode';
+    rows.push([dateRange]);
+    rows.push([`Dicetak: ${printedAt()}`]);
+    rows.push([]);
+
+    if (salesSummary) {
+      rows.push(['Total Transaksi', salesSummary.total_orders]);
+      rows.push(['Total Pendapatan', salesSummary.total_revenue]);
+      rows.push(['Total Item Terjual', salesSummary.total_items_sold]);
+      rows.push([]);
+    }
+
+    rows.push(['No. Order', 'Tanggal', 'Item', 'Pembayaran', 'Total (IDR)']);
+    filteredOrders.forEach(order => {
+      rows.push([
+        order.order_number,
+        formatDate(order.created_at),
+        order.items.length,
+        order.payment_method.toUpperCase(),
+        order.total_amount_idr,
+      ]);
+    });
+
+    saveExcel(`laporan-penjualan-${todayStamp()}.xlsx`, 'Penjualan', rows, [
+      { wch: 20 }, { wch: 24 }, { wch: 8 }, { wch: 14 }, { wch: 18 },
+    ]);
+    toast.success('Laporan Penjualan (Excel) berhasil diunduh!');
+  };
+
+  const exportInventoryExcel = () => {
+    const rows: (string | number)[][] = [['Laporan Inventori']];
+    rows.push([`Dicetak: ${printedAt()}`]);
+    rows.push([]);
+
+    if (inventorySummary) {
+      rows.push(['Total Produk', inventorySummary.total_products]);
+      rows.push(['Nilai Stok (Modal)', inventorySummary.total_stock_value_cost]);
+      rows.push(['Nilai Stok (Jual)', inventorySummary.total_stock_value_selling]);
+      rows.push(['Stok Menipis', inventorySummary.low_stock_count]);
+      rows.push(['Stok Habis', inventorySummary.out_of_stock_count]);
+      rows.push([]);
+    }
+
+    rows.push(['SKU', 'Produk', 'Stok', 'Harga Modal', 'Harga Jual', 'Nilai (Modal)', 'Nilai (Jual)', 'Status']);
+    filteredInventory.forEach(item => {
+      rows.push([
+        item.sku,
+        item.product_name,
+        item.current_stock,
+        item.cost_price_idr,
+        item.selling_price_idr,
+        item.stock_value_cost,
+        item.stock_value_selling,
+        item.status,
+      ]);
+    });
+
+    saveExcel(`laporan-inventori-${todayStamp()}.xlsx`, 'Inventori', rows, [
+      { wch: 16 }, { wch: 28 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 12 },
+    ]);
+    toast.success('Laporan Inventori (Excel) berhasil diunduh!');
+  };
+
+  const exportMovementExcel = () => {
+    const rows: (string | number)[][] = [['Laporan Pergerakan Stok']];
+    rows.push([`Dicetak: ${printedAt()}`]);
+    rows.push([]);
+
+    rows.push(['Tanggal', 'SKU', 'Produk', 'Tipe', 'Qty', 'Keterangan']);
+    filteredMovements.forEach(m => {
+      rows.push([
+        m.date,
+        m.sku,
+        m.name,
+        m.type === 'in' ? 'Masuk' : m.type === 'out' ? 'Keluar' : 'Penyesuaian',
+        m.qty,
+        m.reason,
+      ]);
+    });
+
+    saveExcel(`laporan-pergerakan-stok-${todayStamp()}.xlsx`, 'Pergerakan Stok', rows, [
+      { wch: 22 }, { wch: 16 }, { wch: 28 }, { wch: 12 }, { wch: 8 }, { wch: 30 },
+    ]);
+    toast.success('Laporan Pergerakan Stok (Excel) berhasil diunduh!');
+  };
+
+  const handleExportExcel = () => {
+    if (activeTab === 'sales') exportSalesExcel();
+    else if (activeTab === 'inventory') exportInventoryExcel();
+    else exportMovementExcel();
+  };
+
   return (
     <>
       {/* Page Header */}
@@ -356,13 +479,34 @@ export default function BranchReports() {
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Laporan</h1>
           <p className="text-slate-500">Pantau kinerja penjualan dan status inventori cabang Anda.</p>
         </div>
-        <button
-          onClick={handleExportPDF}
-          className="px-4 py-2 bg-[#21AC3A] hover:bg-[#1d9732] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          Ekspor PDF
-        </button>
+        <div className="relative" ref={exportMenuRef}>
+          <button
+            onClick={() => setIsExportMenuOpen(open => !open)}
+            className="px-4 py-2 bg-[#21AC3A] hover:bg-[#1d9732] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Ekspor
+            <ChevronDown className={`w-4 h-4 transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isExportMenuOpen && (
+            <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden z-20">
+              <button
+                onClick={() => { handleExportPDF(); setIsExportMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <FileText className="w-4 h-4 text-red-500" />
+                Ekspor PDF
+              </button>
+              <button
+                onClick={() => { handleExportExcel(); setIsExportMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer border-t border-slate-100"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                Ekspor Excel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
