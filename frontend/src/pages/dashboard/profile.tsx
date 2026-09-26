@@ -32,7 +32,7 @@ export default function ProfilePage() {
     setIsLoading(true);
     setErrorMessage('');
     
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) {
       navigate('/auth/login');
       return;
@@ -59,6 +59,7 @@ export default function ProfilePage() {
       setErrorMessage(err.message || 'Terjadi kesalahan jaringan');
       if (err.message.includes('token') || err.message.includes('auth')) {
         localStorage.removeItem('token');
+        sessionStorage.removeItem('token');
         navigate('/auth/login');
       }
     } finally {
@@ -76,7 +77,7 @@ export default function ProfilePage() {
     }
     setIsSaving(true);
     
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 
     try {
       const response = await fetch('/api/auth/me', {
@@ -105,6 +106,7 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     navigate('/auth/login');
   };
 
