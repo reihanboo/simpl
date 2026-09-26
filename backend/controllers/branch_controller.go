@@ -49,16 +49,44 @@ func CreateBranch(c *gin.Context) {
 		return
 	}
 
+	// Start a transaction since we are creating a branch and its inventory links
+	tx := config.DB.Begin()
+
 	branch := models.Branch{
 		BusinessID: businessUUID,
 		Name:       input.Name,
 		Address:    input.Address,
 	}
 
-	if err := config.DB.Create(&branch).Error; err != nil {
+	if err := tx.Create(&branch).Error; err != nil {
+		tx.Rollback()
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat cabang.")
 		return
 	}
+
+	// Fetch all existing products for this business
+	var products []models.Product
+	if err := tx.Where("business_id = ?", businessUUID).Find(&products).Error; err != nil {
+		tx.Rollback()
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat katalog produk.")
+		return
+	}
+
+	// Create BranchInventory (0 stock) for each product for this new branch
+	for _, p := range products {
+		inv := models.BranchInventory{
+			BranchID:     branch.ID,
+			ProductID:    p.ID,
+			CurrentStock: 0,
+		}
+		if err := tx.Create(&inv).Error; err != nil {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal sinkronisasi inventori cabang baru.")
+			return
+		}
+	}
+
+	tx.Commit()
 
 	c.JSON(http.StatusCreated, gin.H{
 		"branch": branch,
