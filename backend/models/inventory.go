@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Product represents an item in the business's master catalog
@@ -15,8 +16,9 @@ type Product struct {
 	CostPriceIDR      int64     `gorm:"not null" json:"cost_price_idr"`
 	SellingPriceIDR   int64     `gorm:"not null" json:"selling_price_idr"`
 	LowStockThreshold int       `gorm:"not null;default:10" json:"low_stock_threshold"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Associations
 	BranchInventories []BranchInventory `gorm:"foreignKey:ProductID" json:"branch_inventories,omitempty"`

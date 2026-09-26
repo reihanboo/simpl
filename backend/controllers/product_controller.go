@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func GetProducts(c *gin.Context) {
@@ -291,8 +292,10 @@ func GetStockMovements(c *gin.Context) {
 
 	// Fetch movements for the branch
 	var movements []models.StockMovement
-	// Preload Product if needed. We don't have a relationship setup for User, but we can return raw data
-	if err := config.DB.Preload("Product").Where("branch_id = ?", branchID).Order("created_at desc").Find(&movements).Error; err != nil {
+	// Preload Product (unscoped to include deleted products) so we still see their names in history
+	if err := config.DB.Preload("Product", func(db *gorm.DB) *gorm.DB {
+		return db.Unscoped()
+	}).Where("branch_id = ?", branchID).Order("created_at desc").Find(&movements).Error; err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat histori pergerakan stok")
 		return
 	}
@@ -333,5 +336,43 @@ func GetStockMovements(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": response,
+	})
+}
+
+func DeleteProduct(c *gin.Context) {
+	// Get user from context
+	_, exists := c.Get("userID")
+	if !exists {
+		utils.RespondError(c, http.StatusUnauthorized, "Sesi tidak ditemukan")
+		return
+	}
+
+	productIDStr := c.Param("product_id")
+	productID, err := uuid.Parse(productIDStr)
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "ID produk tidak valid")
+		return
+	}
+
+	tx := config.DB.Begin()
+
+	// Delete branch inventories related to the product
+	if err := tx.Where("product_id = ?", productID).Delete(&models.BranchInventory{}).Error; err != nil {
+		tx.Rollback()
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal menghapus inventori cabang")
+		return
+	}
+
+	// Soft delete the product itself
+	if err := tx.Where("id = ?", productID).Delete(&models.Product{}).Error; err != nil {
+		tx.Rollback()
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal menghapus produk")
+		return
+	}
+
+	tx.Commit()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Produk berhasil dihapus",
 	})
 }

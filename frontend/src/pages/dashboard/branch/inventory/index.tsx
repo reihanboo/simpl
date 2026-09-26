@@ -14,7 +14,8 @@ import {
   ArrowUpFromLine,
   BoxSelect,
   X,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -22,6 +23,7 @@ export default function BranchInventory() {
   const { id } = useParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStock, setFilterStock] = useState('all');
+  const [filterMovement, setFilterMovement] = useState('all');
   const [activeTab, setActiveTab] = useState<'inventory' | 'movement'>('inventory');
 
   // Data State
@@ -109,7 +111,7 @@ export default function BranchInventory() {
     }
   };
 
-  // Movement Modal State
+  // Movement Modal State (Per Item)
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
   const [movementProduct, setMovementProduct] = useState<any>(null);
   const [movementType, setMovementType] = useState<'in' | 'out'>('in');
@@ -117,6 +119,71 @@ export default function BranchInventory() {
     qty_change: 1,
     reason: 'restock' // default
   });
+
+  // Global Adjustment Modal State
+  const [isAdjModalOpen, setIsAdjModalOpen] = useState(false);
+  const [adjForm, setAdjForm] = useState({
+    product_id: '',
+    qty_change: 0,
+    reason: 'adjustment'
+  });
+  const [adjSearchQuery, setAdjSearchQuery] = useState('');
+  const [isAdjDropdownOpen, setIsAdjDropdownOpen] = useState(false);
+
+  const filteredAdjProducts = products.filter(p => 
+    p.name.toLowerCase().includes(adjSearchQuery.toLowerCase()) || 
+    p.sku.toLowerCase().includes(adjSearchQuery.toLowerCase())
+  );
+
+  const handleAdjSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjForm.product_id || adjForm.qty_change === 0) {
+      toast.error('Pilih produk dan masukkan jumlah penyesuaian yang valid (tidak nol).');
+      return;
+    }
+    
+    // Validasi stok minus
+    const product = products.find(p => p.product_id === adjForm.product_id);
+    if (adjForm.qty_change < 0 && product && product.current_stock + adjForm.qty_change < 0) {
+      toast.error('Jumlah pengurangan melebihi stok yang tersedia.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      const payload = {
+        qty_change: adjForm.qty_change,
+        reason: adjForm.reason
+      };
+
+      const res = await fetch(`/api/branches/${id}/products/${adjForm.product_id}/movement`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        setIsAdjModalOpen(false);
+        setAdjForm({ product_id: '', qty_change: 0, reason: 'adjustment' });
+        setAdjSearchQuery('');
+        fetchProductsAndMovements();
+        toast.success('Penyesuaian stok berhasil dicatat!');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal mencatat penyesuaian stok');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Terjadi kesalahan jaringan.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleOpenMovementModal = (product: any, type: 'in' | 'out') => {
     setMovementProduct(product);
@@ -168,6 +235,40 @@ export default function BranchInventory() {
     }
   };
 
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<any>(null);
+
+  const handleDeleteProductClick = (product: any) => {
+    setProductToDelete(product);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const res = await fetch(`/api/branches/${id}/products/${productToDelete.product_id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success('Produk berhasil dihapus');
+        setIsDeleteModalOpen(false);
+        setProductToDelete(null);
+        fetchProductsAndMovements();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Gagal menghapus produk');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Terjadi kesalahan jaringan.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Derived state for pagination and filtering
   const filteredProducts = products.filter(p => {
@@ -179,11 +280,17 @@ export default function BranchInventory() {
     return matchesSearch && matchesStatus;
   });
 
-  const totalItems = activeTab === 'inventory' ? filteredProducts.length : stockMovements.length;
+  const filteredMovements = stockMovements.filter(m => {
+    const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.sku.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterMovement === 'all' ? true : filterMovement === m.type;
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalItems = activeTab === 'inventory' ? filteredProducts.length : filteredMovements.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const paginatedMovements = stockMovements.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedMovements = filteredMovements.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const safeCount = products.filter(p => p.status === 'Aman').length;
   const lowCount = products.filter(p => p.status === 'Menipis').length;
@@ -198,7 +305,10 @@ export default function BranchInventory() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2">
+          <button 
+            onClick={() => setIsAdjModalOpen(true)}
+            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+          >
             <ArrowUpDown className="w-4 h-4" />
             Penyesuaian Stok
           </button>
@@ -288,16 +398,29 @@ export default function BranchInventory() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
               <Filter className="w-4 h-4 text-slate-400" />
-              <select
-                className="bg-transparent outline-none cursor-pointer"
-                value={filterStock}
-                onChange={(e) => setFilterStock(e.target.value)}
-              >
-                <option value="all">Semua Status</option>
-                <option value="safe">Aman</option>
-                <option value="low">Menipis</option>
-                <option value="out">Habis</option>
-              </select>
+              {activeTab === 'inventory' ? (
+                <select
+                  className="bg-transparent outline-none cursor-pointer"
+                  value={filterStock}
+                  onChange={(e) => { setFilterStock(e.target.value); setCurrentPage(1); }}
+                >
+                  <option value="all">Semua Status</option>
+                  <option value="safe">Aman</option>
+                  <option value="low">Menipis</option>
+                  <option value="out">Habis</option>
+                </select>
+              ) : (
+                <select
+                  className="bg-transparent outline-none cursor-pointer"
+                  value={filterMovement}
+                  onChange={(e) => { setFilterMovement(e.target.value); setCurrentPage(1); }}
+                >
+                  <option value="all">Semua Pergerakan</option>
+                  <option value="in">Barang Masuk</option>
+                  <option value="out">Barang Keluar</option>
+                  <option value="adj">Penyesuaian (Minus)</option>
+                </select>
+              )}
             </div>
           </div>
         </div>
@@ -371,8 +494,8 @@ export default function BranchInventory() {
                           <button onClick={() => handleOpenMovementModal(product, 'out')} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Catat Barang Keluar">
                             <ArrowUpFromLine className="w-4 h-4" />
                           </button>
-                          <button className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors" title="Lebih banyak">
-                            <MoreVertical className="w-4 h-4" />
+                          <button onClick={() => handleDeleteProductClick(product)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Hapus Produk">
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -707,6 +830,192 @@ export default function BranchInventory() {
                   movementType === 'in' ? 'Tambah Stok' : 'Kurangi Stok'
                 )}
               </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Global Stock Adjustment Modal */}
+      {isAdjModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => !isSubmitting && setIsAdjModalOpen(false)} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col"
+          >
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Penyesuaian Stok Global</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Pilih produk dan masukkan jumlah penyesuaian (bisa positif atau negatif).
+                </p>
+              </div>
+              <button
+                onClick={() => !isSubmitting && setIsAdjModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <form id="adj-form" onSubmit={handleAdjSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Pilih Produk</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Ketik nama produk atau SKU..."
+                      value={adjSearchQuery}
+                      onChange={(e) => {
+                        setAdjSearchQuery(e.target.value);
+                        setIsAdjDropdownOpen(true);
+                        // Reset selected product if user types something new
+                        if (adjForm.product_id) {
+                          setAdjForm({ ...adjForm, product_id: '' });
+                        }
+                      }}
+                      onFocus={() => setIsAdjDropdownOpen(true)}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
+                    />
+                    
+                    {isAdjDropdownOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-10" 
+                          onClick={() => setIsAdjDropdownOpen(false)} 
+                        />
+                        <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                          {filteredAdjProducts.length > 0 ? (
+                            <ul className="py-2">
+                              {filteredAdjProducts.map(p => (
+                                <li
+                                  key={p.product_id}
+                                  className={`px-4 py-2 cursor-pointer relative z-30 hover:bg-slate-50 ${adjForm.product_id === p.product_id ? 'bg-[#21AC3A]/10 text-[#21AC3A]' : 'text-slate-700'}`}
+                                  onClick={() => {
+                                    setAdjForm({ ...adjForm, product_id: p.product_id });
+                                    setAdjSearchQuery(`${p.name} (SKU: ${p.sku})`);
+                                    setIsAdjDropdownOpen(false);
+                                  }}
+                                >
+                                <div className="font-medium">{p.name}</div>
+                                <div className="text-xs text-slate-500">SKU: {p.sku} • Sisa Stok: <span className="font-bold">{p.current_stock}</span></div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                            Produk tidak ditemukan
+                          </div>
+                        )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Jumlah Penyesuaian (+ / -)</label>
+                  <input
+                    type="number"
+                    required
+                    value={adjForm.qty_change}
+                    onChange={(e) => setAdjForm({ ...adjForm, qty_change: parseInt(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
+                    placeholder="Contoh: 10 atau -5"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Gunakan tanda minus (-) untuk mengurangi stok, atau angka biasa untuk menambah stok.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700">Alasan / Keterangan</label>
+                  <input
+                    type="text"
+                    required
+                    value={adjForm.reason}
+                    onChange={(e) => setAdjForm({ ...adjForm, reason: e.target.value })}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
+                    placeholder="Contoh: Barang Rusak, Salah Hitung"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsAdjModalOpen(false)}
+                disabled={isSubmitting}
+                className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                form="adj-form"
+                disabled={isSubmitting || !adjForm.product_id || adjForm.qty_change === 0}
+                className="px-6 py-2.5 text-sm font-bold text-white bg-[#21AC3A] hover:bg-[#1d9732] rounded-xl transition-colors shadow-sm shadow-[#21AC3A]/20 flex items-center gap-2 cursor-pointer disabled:opacity-70"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  'Simpan Penyesuaian'
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => !isSubmitting && setIsDeleteModalOpen(false)} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col"
+          >
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">Hapus Produk?</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                Apakah Anda yakin ingin menghapus <span className="font-semibold text-slate-800">{productToDelete.name}</span>? Tindakan ini akan menghapus produk dari inventori, tetapi riwayat pergerakan stok tetap akan disimpan.
+              </p>
+              
+              <div className="flex gap-3 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteProduct}
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm shadow-red-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-70"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Menghapus...
+                    </>
+                  ) : (
+                    'Ya, Hapus Produk'
+                  )}
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>
