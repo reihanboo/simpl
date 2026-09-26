@@ -122,6 +122,8 @@ export default function DashboardLayout() {
           name: pathSegment.charAt(0).toUpperCase() + pathSegment.slice(1).replace('-', ' '),
           path: currentPath
         });
+      } else if (breadcrumbs.length > 0) {
+        breadcrumbs[breadcrumbs.length - 1].path = currentPath;
       }
     });
 
