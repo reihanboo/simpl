@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Scanner } from '@yudiel/react-qr-scanner';
+import toast from 'react-hot-toast';
 import {
   Search,
   ShoppingCart,
@@ -13,18 +14,17 @@ import {
   CreditCard,
   Delete
 } from 'lucide-react';
+import { useParams } from 'react-router-dom';
 
-// MOCK DATA
-const MOCK_PRODUCTS = [
-  { id: '1', name: 'Kopi Susu Gula Aren', category: 'Minuman', price: 18000, stock: 50, image: 'https://images.unsplash.com/photo-1578314675249-a6910f80cc4e?w=300&h=300&fit=crop' },
-  { id: '2', name: 'Americano Dingin', category: 'Minuman', price: 15000, stock: 45, image: 'https://images.unsplash.com/photo-1551030173-122aabc4489c?w=300&h=300&fit=crop' },
-  { id: '3', name: 'Croissant Butter', category: 'Makanan', price: 25000, stock: 20, image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300&h=300&fit=crop' },
-  { id: '4', name: 'Matcha Latte', category: 'Minuman', price: 22000, stock: 30, image: 'https://images.unsplash.com/photo-1536281140500-7b624405d66d?w=300&h=300&fit=crop' },
-  { id: '5', name: 'Cookies Cokelat', category: 'Makanan', price: 12000, stock: 40, image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=300&h=300&fit=crop' },
-  { id: '6', name: 'Nasi Goreng Spesial', category: 'Makanan', price: 35000, stock: 15, image: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=300&h=300&fit=crop' },
-  { id: '7', name: 'Es Teh Manis', category: 'Minuman', price: 8000, stock: 100, image: 'https://images.unsplash.com/photo-1499638673689-79a0b5115d87?w=300&h=300&fit=crop' },
-  { id: '8', name: 'Kentang Goreng', category: 'Snack', price: 18000, stock: 25, image: 'https://images.unsplash.com/photo-1576107232684-1279f390859f?w=300&h=300&fit=crop' },
-];
+interface Product {
+  id: string;
+  name: string;
+  sku: string;
+  selling_price_idr: number;
+  current_stock: number;
+  image?: string;
+}
+
 
 interface CartItem {
   id: string;
@@ -35,12 +35,41 @@ interface CartItem {
 }
 
 export default function BranchPOS() {
+  const { id: branchId } = useParams();
   const [searchQuery, setSearchQuery] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const res = await fetch(`/api/branches/${branchId}/products`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mappedProducts = (data.data || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            selling_price_idr: p.selling_price_idr,
+            current_stock: p.current_stock || 0,
+          }));
+          setProducts(mappedProducts);
+        }
+      } catch (err) {
+        console.error("Failed to fetch products", err);
+      }
+    };
+    if (branchId) {
+      fetchProducts();
+    }
+  }, [branchId]);
 
   const handlePaymentNumpad = (val: string) => {
     setAmountPaid(prev => {
@@ -62,17 +91,17 @@ export default function BranchPOS() {
   };
 
   // Filter products based on search
-  const filteredProducts = MOCK_PRODUCTS.filter(p => {
-    return p.name.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredProducts = products.filter(p => {
+    return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const addToCart = (product: typeof MOCK_PRODUCTS[0]) => {
+  const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
         return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
       }
-      return [...prev, { id: product.id, name: product.name, price: product.price, qty: 1, discount: 0 }];
+      return [...prev, { id: product.id, name: product.name, price: product.selling_price_idr, qty: 1, discount: 0 }];
     });
   };
 
@@ -226,43 +255,50 @@ export default function BranchPOS() {
           </button>
         </div>
 
-        {/* Product Grid */}
-        <div className="flex-1 overflow-y-auto p-4 bg-slate-100">
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {filteredProducts.map((product) => (
-              <motion.div
-                layoutId={`product-${product.id}`}
-                key={product.id}
-                onClick={() => addToCart(product)}
-                className="bg-white border border-slate-200 rounded-xl overflow-hidden cursor-pointer hover:border-[#21AC3A] hover:shadow-lg transition-all group flex flex-col shadow-sm"
-              >
-                <div className="h-28 bg-slate-100 relative overflow-hidden shrink-0">
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
-                  {product.stock <= 20 && (
-                    <div className="absolute top-1.5 right-1.5 bg-amber-500/90 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
-                      Sisa {product.stock}
-                    </div>
-                  )}
-                </div>
-                <div className="p-2.5 flex flex-col flex-1">
-                  <h3 className="font-semibold text-slate-800 text-xs line-clamp-2 leading-tight flex-1">{product.name}</h3>
-                  <p className="text-slate-900 font-bold text-sm mt-1">Rp {product.price.toLocaleString('id-ID')}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <ScanLine className="w-12 h-12 mb-2 opacity-20" />
-              <p>Tidak ada produk ditemukan.</p>
-            </div>
-          )}
+        {/* Product Table */}
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          <table className="w-full text-left border-collapse">
+            <thead className="sticky top-0 bg-white shadow-sm z-10 text-xs font-semibold text-slate-500 uppercase">
+              <tr>
+                <th className="px-4 py-3 border-b border-slate-200">SKU</th>
+                <th className="px-4 py-3 border-b border-slate-200">Produk</th>
+                <th className="px-4 py-3 border-b border-slate-200 text-right">Stok</th>
+                <th className="px-4 py-3 border-b border-slate-200 text-right">Harga</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredProducts.map((product) => (
+                <tr
+                  key={product.id}
+                  onClick={() => addToCart(product)}
+                  className="hover:bg-slate-100/80 cursor-pointer transition-colors group bg-white"
+                >
+                  <td className="px-4 py-3 text-sm font-medium text-slate-500 font-mono">
+                    {product.sku}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-sm font-bold text-slate-800">{product.name}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={`text-xs font-bold px-2 py-1 rounded-md ${product.current_stock <= 20 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                      {product.current_stock}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">
+                    Rp {product.selling_price_idr.toLocaleString('id-ID')}
+                  </td>
+                </tr>
+              ))}
+              {filteredProducts.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-16 text-center text-slate-400">
+                    <ScanLine className="w-12 h-12 mb-2 mx-auto opacity-20" />
+                    <p className="text-sm">Tidak ada produk ditemukan.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -409,14 +445,32 @@ export default function BranchPOS() {
         <ScannerModal
           onClose={() => setIsScannerOpen(false)}
           onScan={(decodedText) => {
-            // Check if product exists by SKU or ID (mock data uses ID as SKU for now)
-            const product = MOCK_PRODUCTS.find(p => p.id === decodedText || p.name.includes(decodedText));
+            // Play a beep sound
+            try {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioCtx.createOscillator();
+              const gainNode = audioCtx.createGain();
+              oscillator.connect(gainNode);
+              gainNode.connect(audioCtx.destination);
+              oscillator.type = 'sine';
+              oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+              gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
+              oscillator.start(audioCtx.currentTime);
+              oscillator.stop(audioCtx.currentTime + 0.1);
+            } catch (e) {
+              console.error("Audio playback failed", e);
+            }
+
+            // Check if product exists by SKU or ID
+            const product = products.find(p => p.sku === decodedText || p.id === decodedText || p.name.includes(decodedText));
             if (product) {
               addToCart(product);
+              setSearchQuery(''); // clear search bar
             } else {
-              alert(`Produk dengan barcode ${decodedText} tidak ditemukan.`);
+              toast.error(`Produk dengan barcode ${decodedText} tidak ditemukan.`);
             }
-            setIsScannerOpen(false);
+            // intentionally NOT closing the modal here
           }}
         />
       )}
@@ -427,6 +481,20 @@ export default function BranchPOS() {
 
 // Separate component for the scanner so it only mounts/unmounts when needed
 function ScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (text: string) => void }) {
+  const onScanRef = useRef(onScan);
+
+  // Keep the ref updated with the latest onScan closure so we don't need to change the function reference passed to Scanner
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  const handleScan = useCallback((result: any[]) => {
+    if (result && result.length > 0) {
+      const text = result[0].rawValue;
+      onScanRef.current(text);
+    }
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
@@ -449,12 +517,10 @@ function ScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (text:
         </div>
         <div className="p-0 bg-black relative">
           <Scanner
-            onScan={(result) => {
-              if (result && result.length > 0) {
-                onScan(result[0].rawValue);
-              }
-            }}
+            onScan={handleScan}
             formats={['qr_code', 'code_128', 'ean_13', 'ean_8']}
+            allowMultiple={true}
+            scanDelay={2000}
             onError={(error) => console.log(error?.message)}
           />
         </div>
