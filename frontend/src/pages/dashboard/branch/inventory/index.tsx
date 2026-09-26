@@ -6,7 +6,6 @@ import {
   Plus,
   Filter,
   ArrowUpDown,
-  MoreVertical,
   AlertCircle,
   PackageCheck,
   PackageOpen,
@@ -39,7 +38,7 @@ export default function BranchInventory() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      
+
       const [productsRes, movementsRes] = await Promise.all([
         fetch(`/api/branches/${id}/products`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -53,7 +52,7 @@ export default function BranchInventory() {
         const data = await productsRes.json();
         setProducts(data.data || []);
       }
-      
+
       if (movementsRes.ok) {
         const data = await movementsRes.json();
         setStockMovements(data.data || []);
@@ -130,8 +129,8 @@ export default function BranchInventory() {
   const [adjSearchQuery, setAdjSearchQuery] = useState('');
   const [isAdjDropdownOpen, setIsAdjDropdownOpen] = useState(false);
 
-  const filteredAdjProducts = products.filter(p => 
-    p.name.toLowerCase().includes(adjSearchQuery.toLowerCase()) || 
+  const filteredAdjProducts = products.filter(p =>
+    p.name.toLowerCase().includes(adjSearchQuery.toLowerCase()) ||
     p.sku.toLowerCase().includes(adjSearchQuery.toLowerCase())
   );
 
@@ -141,7 +140,7 @@ export default function BranchInventory() {
       toast.error('Pilih produk dan masukkan jumlah penyesuaian yang valid (tidak nol).');
       return;
     }
-    
+
     // Validasi stok minus
     const product = products.find(p => p.product_id === adjForm.product_id);
     if (adjForm.qty_change < 0 && product && product.current_stock + adjForm.qty_change < 0) {
@@ -152,7 +151,7 @@ export default function BranchInventory() {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      
+
       const payload = {
         qty_change: adjForm.qty_change,
         reason: adjForm.reason
@@ -198,13 +197,13 @@ export default function BranchInventory() {
   const handleMovementSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!movementProduct) return;
-    
+
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       // For type 'out', quantity change should be negative
       const qty = movementType === 'in' ? Math.abs(movementForm.qty_change) : -Math.abs(movementForm.qty_change);
-      
+
       const payload = {
         qty_change: qty,
         reason: movementForm.reason
@@ -288,7 +287,7 @@ export default function BranchInventory() {
 
   const totalItems = activeTab === 'inventory' ? filteredProducts.length : filteredMovements.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
-  
+
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const paginatedMovements = filteredMovements.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -305,7 +304,7 @@ export default function BranchInventory() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setIsAdjModalOpen(true)}
             className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
           >
@@ -480,8 +479,8 @@ export default function BranchInventory() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${product.status === 'Aman' ? 'bg-emerald-100 text-emerald-700' :
-                            product.status === 'Menipis' ? 'bg-amber-100 text-amber-700' :
-                              'bg-red-100 text-red-700'
+                          product.status === 'Menipis' ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
                           }`}>
                           {product.status}
                         </span>
@@ -531,8 +530,8 @@ export default function BranchInventory() {
                     </td>
                     <td className="px-6 py-4">
                       <div className={`inline-flex items-center gap-1.5 font-bold ${movement.type === 'in' ? 'text-emerald-600' :
-                          movement.type === 'out' ? 'text-amber-600' :
-                            'text-red-600'
+                        movement.type === 'out' ? 'text-amber-600' :
+                          'text-red-600'
                         }`}>
                         {movement.type === 'in' ? <ArrowDownToLine className="w-4 h-4" /> :
                           movement.type === 'out' ? <ArrowUpFromLine className="w-4 h-4" /> :
@@ -817,9 +816,8 @@ export default function BranchInventory() {
                 type="submit"
                 form="movement-form"
                 disabled={isSubmitting || movementForm.qty_change <= 0 || (movementType === 'out' && movementForm.qty_change > movementProduct.current_stock)}
-                className={`px-6 py-2.5 text-sm font-bold text-white rounded-xl transition-colors shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-70 ${
-                  movementType === 'in' ? 'bg-[#21AC3A] hover:bg-[#1d9732] shadow-[#21AC3A]/20' : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
-                }`}
+                className={`px-6 py-2.5 text-sm font-bold text-white rounded-xl transition-colors shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-70 ${movementType === 'in' ? 'bg-[#21AC3A] hover:bg-[#1d9732] shadow-[#21AC3A]/20' : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20'
+                  }`}
               >
                 {isSubmitting ? (
                   <>
@@ -879,12 +877,12 @@ export default function BranchInventory() {
                       onFocus={() => setIsAdjDropdownOpen(true)}
                       className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
                     />
-                    
+
                     {isAdjDropdownOpen && (
                       <>
-                        <div 
-                          className="fixed inset-0 z-10" 
-                          onClick={() => setIsAdjDropdownOpen(false)} 
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setIsAdjDropdownOpen(false)}
                         />
                         <div className="absolute z-20 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                           {filteredAdjProducts.length > 0 ? (
@@ -899,16 +897,16 @@ export default function BranchInventory() {
                                     setIsAdjDropdownOpen(false);
                                   }}
                                 >
-                                <div className="font-medium">{p.name}</div>
-                                <div className="text-xs text-slate-500">SKU: {p.sku} • Sisa Stok: <span className="font-bold">{p.current_stock}</span></div>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="px-4 py-3 text-sm text-slate-500 text-center">
-                            Produk tidak ditemukan
-                          </div>
-                        )}
+                                  <div className="font-medium">{p.name}</div>
+                                  <div className="text-xs text-slate-500">SKU: {p.sku} • Sisa Stok: <span className="font-bold">{p.current_stock}</span></div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                              Produk tidak ditemukan
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -990,7 +988,7 @@ export default function BranchInventory() {
               <p className="text-sm text-slate-500 mb-6">
                 Apakah Anda yakin ingin menghapus <span className="font-semibold text-slate-800">{productToDelete.name}</span>? Tindakan ini akan menghapus produk dari inventori, tetapi riwayat pergerakan stok tetap akan disimpan.
               </p>
-              
+
               <div className="flex gap-3 justify-center">
                 <button
                   type="button"
