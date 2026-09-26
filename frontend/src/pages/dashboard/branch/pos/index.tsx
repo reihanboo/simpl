@@ -54,7 +54,7 @@ export default function BranchPOS() {
         if (res.ok) {
           const data = await res.json();
           const mappedProducts = (data.data || []).map((p: any) => ({
-            id: p.id,
+            id: p.product_id,
             name: p.name,
             sku: p.sku,
             selling_price_idr: p.selling_price_idr,
@@ -424,11 +424,57 @@ export default function BranchPOS() {
                 Batal
               </button>
               <button
-                onClick={() => {
-                  alert('Pembayaran Berhasil!');
-                  setCart([]);
-                  setIsPaymentModalOpen(false);
-                  setAmountPaid('');
+                onClick={async () => {
+                  try {
+                    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                    
+                    const orderPayload = {
+                      payment_method: 'cash',
+                      items: cart.map(item => ({
+                        product_id: item.id,
+                        qty: item.qty
+                      }))
+                    };
+
+                    const orderRes = await fetch(`/api/branches/${branchId}/orders`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify(orderPayload)
+                    });
+
+                    if (!orderRes.ok) {
+                      throw new Error('Failed to create order');
+                    }
+
+                    toast.success('Pembayaran Berhasil! Stok telah diperbarui.');
+                    
+                    // Refresh products to get latest stock
+                    const res = await fetch(`/api/branches/${branchId}/products`, {
+                      headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      const mappedProducts = (data.data || []).map((p: any) => ({
+                        id: p.product_id,
+                        name: p.name,
+                        sku: p.sku,
+                        selling_price_idr: p.selling_price_idr,
+                        current_stock: p.current_stock || 0,
+                        image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300&h=300&fit=crop'
+                      }));
+                      setProducts(mappedProducts);
+                    }
+
+                    setCart([]);
+                    setIsPaymentModalOpen(false);
+                    setAmountPaid('');
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('Terjadi kesalahan saat memproses pembayaran');
+                  }
                 }}
                 disabled={typeof amountPaid !== 'number' || amountPaid < total}
                 className="flex-1 px-4 py-3 text-sm font-bold text-white bg-[#21AC3A] hover:bg-[#1d9732] shadow-sm shadow-[#21AC3A]/20 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
