@@ -62,7 +62,7 @@ func main() {
 			business.POST("", controllers.CreateBusiness)
 			business.GET("", controllers.GetBusinesses)
 		}
-		
+
 		branch := api.Group("/branches")
 		branch.Use(middlewares.AuthMiddleware())
 		{
@@ -70,6 +70,12 @@ func main() {
 			branch.GET("", controllers.GetBranches)
 			branch.PUT("/:id", controllers.UpdateBranch)
 			branch.DELETE("/:id", controllers.DeleteBranch)
+
+			// Inventory & Products
+			branch.POST("/:id/products", controllers.CreateProduct)
+			branch.GET("/:id/products", controllers.GetProducts)
+			branch.POST("/:id/products/:product_id/movement", controllers.AddStockMovement)
+			branch.GET("/:id/movements", controllers.GetStockMovements)
 		}
 	}
 

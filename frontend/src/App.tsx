@@ -16,6 +16,7 @@ import VerifyOtpPage from './pages/auth/verify-otp';
 import BranchDashboard from './pages/dashboard/branch/index';
 import BranchLayout from './pages/dashboard/branch/layout';
 import BranchInventory from './pages/dashboard/branch/inventory/index';
+import { Toaster } from 'react-hot-toast';
 import './App.css';
 
 function LandingPage() {
@@ -547,7 +548,9 @@ function LandingPage() {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <Toaster position="top-center" />
+      <Routes>
       <Route element={<GuestRoute />}>
         <Route path="/" element={<LandingPage />} />
         <Route path="/auth/login" element={<LoginPage />} />
@@ -568,6 +571,7 @@ export default function App() {
         </Route>
       </Route>
     </Routes>
+    </>
   );
 }
 
