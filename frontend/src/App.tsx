@@ -17,6 +17,7 @@ import BranchDashboard from './pages/dashboard/branch/index';
 import BranchLayout from './pages/dashboard/branch/layout';
 import BranchInventory from './pages/dashboard/branch/inventory/index';
 import BranchPOS from './pages/dashboard/branch/pos/index';
+import BranchReports from './pages/dashboard/branch/reports/index';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
 
@@ -569,6 +570,7 @@ export default function App() {
             <Route index element={<BranchDashboard />} />
             <Route path="inventory" element={<BranchInventory />} />
             <Route path="pos" element={<BranchPOS />} />
+            <Route path="reports" element={<BranchReports />} />
           </Route>
         </Route>
       </Route>

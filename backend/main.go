@@ -80,6 +80,10 @@ func main() {
 			
 			// Orders
 			branch.POST("/:id/orders", controllers.CreateOrder)
+
+			// Reports
+			branch.GET("/:id/reports/sales", controllers.GetSalesReport)
+			branch.GET("/:id/reports/inventory", controllers.GetInventoryReport)
 		}
 	}
 

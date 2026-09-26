@@ -446,7 +446,8 @@ export default function BranchPOS() {
                     });
 
                     if (!orderRes.ok) {
-                      throw new Error('Failed to create order');
+                      const errData = await orderRes.json().catch(() => ({}));
+                      throw new Error(errData.error || 'Failed to create order');
                     }
 
                     toast.success('Pembayaran Berhasil! Stok telah diperbarui.');
@@ -471,9 +472,9 @@ export default function BranchPOS() {
                     setCart([]);
                     setIsPaymentModalOpen(false);
                     setAmountPaid('');
-                  } catch (err) {
+                  } catch (err: any) {
                     console.error(err);
-                    toast.error('Terjadi kesalahan saat memproses pembayaran');
+                    toast.error(err.message || 'Terjadi kesalahan saat memproses pembayaran');
                   }
                 }}
                 disabled={typeof amountPaid !== 'number' || amountPaid < total}
