@@ -56,6 +56,8 @@ func ConnectDB() {
 		&models.Product{},
 		&models.BranchInventory{},
 		&models.StockMovement{},
+		&models.Order{},
+		&models.OrderItem{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)

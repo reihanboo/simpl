@@ -16,6 +16,7 @@ import VerifyOtpPage from './pages/auth/verify-otp';
 import BranchDashboard from './pages/dashboard/branch/index';
 import BranchLayout from './pages/dashboard/branch/layout';
 import BranchInventory from './pages/dashboard/branch/inventory/index';
+import BranchPOS from './pages/dashboard/branch/pos/index';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
 
@@ -567,6 +568,7 @@ export default function App() {
           <Route path="branch/:id" element={<BranchLayout />}>
             <Route index element={<BranchDashboard />} />
             <Route path="inventory" element={<BranchInventory />} />
+            <Route path="pos" element={<BranchPOS />} />
           </Route>
         </Route>
       </Route>

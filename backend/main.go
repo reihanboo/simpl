@@ -77,6 +77,9 @@ func main() {
 			branch.DELETE("/:id/products/:product_id", controllers.DeleteProduct)
 			branch.POST("/:id/products/:product_id/movement", controllers.AddStockMovement)
 			branch.GET("/:id/movements", controllers.GetStockMovements)
+			
+			// Orders
+			branch.POST("/:id/orders", controllers.CreateOrder)
 		}
 	}
 
