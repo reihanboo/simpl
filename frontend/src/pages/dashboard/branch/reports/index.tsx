@@ -22,7 +22,7 @@ import {
 import { useParams } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // Types
 interface OrderItem {
@@ -95,12 +95,179 @@ const formatDate = (dateStr: string) => {
 const printedAt = () => new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const todayStamp = () => new Date().toISOString().slice(0, 10);
 
-const saveExcel = (filename: string, sheetName: string, rows: (string | number)[][], cols: { wch: number }[]) => {
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  worksheet['!cols'] = cols;
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  XLSX.writeFile(workbook, filename);
+const BRAND_GREEN = 'FF21AC3A';
+const THIN_BORDER: Partial<ExcelJS.Borders> = {
+  top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+  right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+};
+
+interface ExcelColumn {
+  header: string;
+  width: number;
+  align?: 'left' | 'center' | 'right';
+  numFmt?: string;
+}
+
+interface ExcelReport {
+  title: string;
+  subtitles: string[];
+  summary: { label: string; value: number; numFmt?: string }[];
+  columns: ExcelColumn[];
+  rows: (string | number)[][];
+}
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const downloadExcelReport = async (filename: string, sheetName: string, report: ExcelReport) => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'SIMPL';
+  workbook.created = new Date();
+  const worksheet = workbook.addWorksheet(sheetName);
+  const colCount = report.columns.length;
+
+  worksheet.columns = report.columns.map(col => ({ width: col.width }));
+
+  // Title band
+  worksheet.mergeCells(1, 1, 1, colCount);
+  const titleCell = worksheet.getCell(1, 1);
+  titleCell.value = report.title;
+  titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+  titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND_GREEN } };
+  worksheet.getRow(1).height = 30;
+
+  // Subtitles
+  report.subtitles.forEach((text, i) => {
+    worksheet.mergeCells(2 + i, 1, 2 + i, colCount);
+    const cell = worksheet.getCell(2 + i, 1);
+    cell.value = text;
+    cell.font = { italic: true, size: 10, color: { argb: 'FF64748B' } };
+    cell.alignment = { horizontal: 'center' };
+  });
+
+  let currentRow = 2 + report.subtitles.length;
+
+  // Summary block
+  if (report.summary.length > 0) {
+    currentRow += 1;
+    report.summary.forEach(item => {
+      const labelCell = worksheet.getCell(currentRow, 1);
+      labelCell.value = item.label;
+      labelCell.font = { bold: true, color: { argb: 'FF334155' } };
+      const valueCell = worksheet.getCell(currentRow, 2);
+      valueCell.value = item.value;
+      valueCell.numFmt = item.numFmt ?? '#,##0';
+      valueCell.font = { bold: true, color: { argb: 'FF0F172A' } };
+      currentRow += 1;
+    });
+  }
+
+  // Header row
+  currentRow += 1;
+  const headerRow = worksheet.getRow(currentRow);
+  report.columns.forEach((col, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = col.header;
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND_GREEN } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = THIN_BORDER;
+  });
+  headerRow.height = 22;
+  const headerRowIndex = currentRow;
+
+  // Data rows
+  report.rows.forEach((dataRow, r) => {
+    const row = worksheet.getRow(headerRowIndex + 1 + r);
+    dataRow.forEach((value, i) => {
+      const col = report.columns[i];
+      const cell = row.getCell(i + 1);
+      cell.value = value;
+      cell.alignment = { vertical: 'middle', horizontal: col.align ?? 'left' };
+      if (col.numFmt) cell.numFmt = col.numFmt;
+      cell.border = THIN_BORDER;
+      if (r % 2 === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      }
+    });
+  });
+
+  worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(
+    new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    filename,
+  );
+};
+
+const pdfBrandHeader = (doc: jsPDF, title: string) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFillColor(33, 172, 58);
+  doc.rect(0, 0, pageWidth, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text(title, 14, 18);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('SIMPL', pageWidth - 14, 18, { align: 'right' });
+};
+
+const pdfSummaryCards = (doc: jsPDF, items: { label: string; value: string }[], startY: number): number => {
+  if (items.length === 0) return startY;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const gap = 4;
+  const cardWidth = (pageWidth - 28 - gap * (items.length - 1)) / items.length;
+  items.forEach((item, i) => {
+    const x = 14 + i * (cardWidth + gap);
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(187, 247, 208);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, startY, cardWidth, 18, 2, 2, 'FD');
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(item.label, x + 3, startY + 7);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(item.value, x + 3, startY + 15);
+  });
+  doc.setFont('helvetica', 'normal');
+  return startY + 24;
+};
+
+const pdfFooter = (doc: jsPDF, label: string) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`SIMPL — ${label}`, 14, pageHeight - 8);
+    doc.text(`Halaman ${i} dari ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' });
+  }
+};
+
+const PDF_TABLE_STYLES = {
+  theme: 'striped' as const,
+  styles: { fontSize: 9, cellPadding: 3, valign: 'middle' as const, lineColor: [226, 232, 240] as [number, number, number], lineWidth: 0.1 },
+  headStyles: { fillColor: [33, 172, 58] as [number, number, number], textColor: 255 as const, fontStyle: 'bold' as const, halign: 'center' as const },
+  alternateRowStyles: { fillColor: [246, 250, 247] as [number, number, number] },
+  margin: { left: 14, right: 14 },
 };
 
 export default function BranchReports() {
@@ -257,115 +424,121 @@ export default function BranchReports() {
   // PDF Export
   const exportSalesPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text('Laporan Penjualan', 14, 22);
+    pdfBrandHeader(doc, 'Laporan Penjualan');
 
-    doc.setFontSize(10);
-    doc.setTextColor(100);
     const dateRange = startDate || endDate
       ? `Periode: ${startDate || '...'} s/d ${endDate || '...'}`
       : 'Semua Periode';
-    doc.text(dateRange, 14, 30);
-    doc.text(`Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 36);
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    doc.text(dateRange, 14, 37);
+    doc.text(`Dicetak: ${printedAt()}`, doc.internal.pageSize.getWidth() - 14, 37, { align: 'right' });
 
-    // Summary
-    if (salesSummary) {
-      doc.setFontSize(11);
-      doc.setTextColor(0);
-      doc.text(`Total Transaksi: ${salesSummary.total_orders}`, 14, 46);
-      doc.text(`Total Pendapatan: ${formatIDR(salesSummary.total_revenue)}`, 14, 52);
-      doc.text(`Total Item Terjual: ${salesSummary.total_items_sold}`, 14, 58);
-    }
-
-    const tableData = filteredOrders.map(order => [
-      order.order_number,
-      formatDate(order.created_at),
-      order.items.length.toString(),
-      order.payment_method.toUpperCase(),
-      formatIDR(order.total_amount_idr),
-    ]);
+    const summaryItems = salesSummary ? [
+      { label: 'Total Transaksi', value: String(salesSummary.total_orders) },
+      { label: 'Total Pendapatan', value: formatIDR(salesSummary.total_revenue) },
+      { label: 'Total Item Terjual', value: String(salesSummary.total_items_sold) },
+    ] : [];
+    const startY = pdfSummaryCards(doc, summaryItems, 44);
 
     autoTable(doc, {
-      startY: 64,
+      ...PDF_TABLE_STYLES,
+      startY,
       head: [['No. Order', 'Tanggal', 'Item', 'Pembayaran', 'Total']],
-      body: tableData,
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [33, 172, 58] },
+      body: filteredOrders.map(order => [
+        order.order_number,
+        formatDate(order.created_at),
+        order.items.length.toString(),
+        order.payment_method.toUpperCase(),
+        formatIDR(order.total_amount_idr),
+      ]),
+      columnStyles: {
+        2: { halign: 'center' },
+        3: { halign: 'center' },
+        4: { halign: 'right' },
+      },
     });
 
-    doc.save(`laporan-penjualan-${new Date().toISOString().slice(0, 10)}.pdf`);
+    pdfFooter(doc, 'Laporan Penjualan');
+    doc.save(`laporan-penjualan-${todayStamp()}.pdf`);
     toast.success('Laporan Penjualan berhasil diunduh!');
   };
 
   const exportInventoryPDF = () => {
     const doc = new jsPDF('landscape');
-    doc.setFontSize(18);
-    doc.text('Laporan Inventori', 14, 22);
+    pdfBrandHeader(doc, 'Laporan Inventori');
 
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 30);
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    doc.text(`Dicetak: ${printedAt()}`, doc.internal.pageSize.getWidth() - 14, 37, { align: 'right' });
 
-    // Summary
-    if (inventorySummary) {
-      doc.setFontSize(11);
-      doc.setTextColor(0);
-      doc.text(`Total Produk: ${inventorySummary.total_products}`, 14, 40);
-      doc.text(`Nilai Stok (Modal): ${formatIDR(inventorySummary.total_stock_value_cost)}`, 14, 46);
-      doc.text(`Nilai Stok (Jual): ${formatIDR(inventorySummary.total_stock_value_selling)}`, 14, 52);
-      doc.text(`Stok Menipis: ${inventorySummary.low_stock_count}  |  Stok Habis: ${inventorySummary.out_of_stock_count}`, 14, 58);
-    }
-
-    const tableData = filteredInventory.map(item => [
-      item.sku,
-      item.product_name,
-      item.current_stock.toString(),
-      formatIDR(item.cost_price_idr),
-      formatIDR(item.selling_price_idr),
-      formatIDR(item.stock_value_cost),
-      formatIDR(item.stock_value_selling),
-      item.status,
-    ]);
+    const summaryItems = inventorySummary ? [
+      { label: 'Total Produk', value: String(inventorySummary.total_products) },
+      { label: 'Nilai Stok (Modal)', value: formatIDR(inventorySummary.total_stock_value_cost) },
+      { label: 'Nilai Stok (Jual)', value: formatIDR(inventorySummary.total_stock_value_selling) },
+      { label: 'Stok Menipis', value: String(inventorySummary.low_stock_count) },
+      { label: 'Stok Habis', value: String(inventorySummary.out_of_stock_count) },
+    ] : [];
+    const startY = pdfSummaryCards(doc, summaryItems, 44);
 
     autoTable(doc, {
-      startY: 64,
+      ...PDF_TABLE_STYLES,
+      startY,
+      styles: { ...PDF_TABLE_STYLES.styles, fontSize: 8 },
       head: [['SKU', 'Produk', 'Stok', 'Harga Modal', 'Harga Jual', 'Nilai (Modal)', 'Nilai (Jual)', 'Status']],
-      body: tableData,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [33, 172, 58] },
+      body: filteredInventory.map(item => [
+        item.sku,
+        item.product_name,
+        item.current_stock.toString(),
+        formatIDR(item.cost_price_idr),
+        formatIDR(item.selling_price_idr),
+        formatIDR(item.stock_value_cost),
+        formatIDR(item.stock_value_selling),
+        item.status,
+      ]),
+      columnStyles: {
+        2: { halign: 'center' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        7: { halign: 'center' },
+      },
     });
 
-    doc.save(`laporan-inventori-${new Date().toISOString().slice(0, 10)}.pdf`);
+    pdfFooter(doc, 'Laporan Inventori');
+    doc.save(`laporan-inventori-${todayStamp()}.pdf`);
     toast.success('Laporan Inventori berhasil diunduh!');
   };
 
   const exportMovementPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text('Laporan Pergerakan Stok', 14, 22);
+    pdfBrandHeader(doc, 'Laporan Pergerakan Stok');
 
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Dicetak: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 30);
-
-    const tableData = filteredMovements.map(m => [
-      m.date,
-      m.sku,
-      m.name,
-      m.type === 'in' ? 'Masuk' : m.type === 'out' ? 'Keluar' : 'Penyesuaian',
-      m.qty > 0 ? `+${m.qty}` : m.qty.toString(),
-      m.reason,
-    ]);
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(9);
+    doc.text(`Dicetak: ${printedAt()}`, doc.internal.pageSize.getWidth() - 14, 37, { align: 'right' });
 
     autoTable(doc, {
-      startY: 40,
+      ...PDF_TABLE_STYLES,
+      startY: 44,
       head: [['Tanggal', 'SKU', 'Produk', 'Tipe', 'Qty', 'Keterangan']],
-      body: tableData,
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [33, 172, 58] },
+      body: filteredMovements.map(m => [
+        m.date,
+        m.sku,
+        m.name,
+        m.type === 'in' ? 'Masuk' : m.type === 'out' ? 'Keluar' : 'Penyesuaian',
+        m.qty > 0 ? `+${m.qty}` : m.qty.toString(),
+        m.reason,
+      ]),
+      columnStyles: {
+        3: { halign: 'center' },
+        4: { halign: 'right' },
+      },
     });
 
-    doc.save(`laporan-pergerakan-stok-${new Date().toISOString().slice(0, 10)}.pdf`);
+    pdfFooter(doc, 'Laporan Pergerakan Stok');
+    doc.save(`laporan-pergerakan-stok-${todayStamp()}.pdf`);
     toast.success('Laporan Pergerakan Stok berhasil diunduh!');
   };
 
@@ -375,100 +548,115 @@ export default function BranchReports() {
     else exportMovementPDF();
   };
 
-  const exportSalesExcel = () => {
-    const rows: (string | number)[][] = [['Laporan Penjualan']];
+  const exportSalesExcel = async () => {
     const dateRange = startDate || endDate
       ? `Periode: ${startDate || '...'} s/d ${endDate || '...'}`
       : 'Semua Periode';
-    rows.push([dateRange]);
-    rows.push([`Dicetak: ${printedAt()}`]);
-    rows.push([]);
-
-    if (salesSummary) {
-      rows.push(['Total Transaksi', salesSummary.total_orders]);
-      rows.push(['Total Pendapatan', salesSummary.total_revenue]);
-      rows.push(['Total Item Terjual', salesSummary.total_items_sold]);
-      rows.push([]);
+    try {
+      await downloadExcelReport(`laporan-penjualan-${todayStamp()}.xlsx`, 'Penjualan', {
+        title: 'Laporan Penjualan',
+        subtitles: [dateRange, `Dicetak: ${printedAt()}`],
+        summary: salesSummary ? [
+          { label: 'Total Transaksi', value: salesSummary.total_orders },
+          { label: 'Total Pendapatan', value: salesSummary.total_revenue, numFmt: '"Rp" #,##0' },
+          { label: 'Total Item Terjual', value: salesSummary.total_items_sold },
+        ] : [],
+        columns: [
+          { header: 'No. Order', width: 20 },
+          { header: 'Tanggal', width: 24 },
+          { header: 'Item', width: 8, align: 'center' },
+          { header: 'Pembayaran', width: 14, align: 'center' },
+          { header: 'Total', width: 18, align: 'right', numFmt: '"Rp" #,##0' },
+        ],
+        rows: filteredOrders.map(order => [
+          order.order_number,
+          formatDate(order.created_at),
+          order.items.length,
+          order.payment_method.toUpperCase(),
+          order.total_amount_idr,
+        ]),
+      });
+      toast.success('Laporan Penjualan (Excel) berhasil diunduh!');
+    } catch (err) {
+      console.error('Failed to export sales report to Excel', err);
+      toast.error('Gagal mengekspor laporan ke Excel');
     }
-
-    rows.push(['No. Order', 'Tanggal', 'Item', 'Pembayaran', 'Total (IDR)']);
-    filteredOrders.forEach(order => {
-      rows.push([
-        order.order_number,
-        formatDate(order.created_at),
-        order.items.length,
-        order.payment_method.toUpperCase(),
-        order.total_amount_idr,
-      ]);
-    });
-
-    saveExcel(`laporan-penjualan-${todayStamp()}.xlsx`, 'Penjualan', rows, [
-      { wch: 20 }, { wch: 24 }, { wch: 8 }, { wch: 14 }, { wch: 18 },
-    ]);
-    toast.success('Laporan Penjualan (Excel) berhasil diunduh!');
   };
 
-  const exportInventoryExcel = () => {
-    const rows: (string | number)[][] = [['Laporan Inventori']];
-    rows.push([`Dicetak: ${printedAt()}`]);
-    rows.push([]);
-
-    if (inventorySummary) {
-      rows.push(['Total Produk', inventorySummary.total_products]);
-      rows.push(['Nilai Stok (Modal)', inventorySummary.total_stock_value_cost]);
-      rows.push(['Nilai Stok (Jual)', inventorySummary.total_stock_value_selling]);
-      rows.push(['Stok Menipis', inventorySummary.low_stock_count]);
-      rows.push(['Stok Habis', inventorySummary.out_of_stock_count]);
-      rows.push([]);
+  const exportInventoryExcel = async () => {
+    try {
+      await downloadExcelReport(`laporan-inventori-${todayStamp()}.xlsx`, 'Inventori', {
+        title: 'Laporan Inventori',
+        subtitles: [`Dicetak: ${printedAt()}`],
+        summary: inventorySummary ? [
+          { label: 'Total Produk', value: inventorySummary.total_products },
+          { label: 'Nilai Stok (Modal)', value: inventorySummary.total_stock_value_cost, numFmt: '"Rp" #,##0' },
+          { label: 'Nilai Stok (Jual)', value: inventorySummary.total_stock_value_selling, numFmt: '"Rp" #,##0' },
+          { label: 'Stok Menipis', value: inventorySummary.low_stock_count },
+          { label: 'Stok Habis', value: inventorySummary.out_of_stock_count },
+        ] : [],
+        columns: [
+          { header: 'SKU', width: 16 },
+          { header: 'Produk', width: 28 },
+          { header: 'Stok', width: 8, align: 'center' },
+          { header: 'Harga Modal', width: 16, align: 'right', numFmt: '"Rp" #,##0' },
+          { header: 'Harga Jual', width: 16, align: 'right', numFmt: '"Rp" #,##0' },
+          { header: 'Nilai (Modal)', width: 18, align: 'right', numFmt: '"Rp" #,##0' },
+          { header: 'Nilai (Jual)', width: 18, align: 'right', numFmt: '"Rp" #,##0' },
+          { header: 'Status', width: 12, align: 'center' },
+        ],
+        rows: filteredInventory.map(item => [
+          item.sku,
+          item.product_name,
+          item.current_stock,
+          item.cost_price_idr,
+          item.selling_price_idr,
+          item.stock_value_cost,
+          item.stock_value_selling,
+          item.status,
+        ]),
+      });
+      toast.success('Laporan Inventori (Excel) berhasil diunduh!');
+    } catch (err) {
+      console.error('Failed to export inventory report to Excel', err);
+      toast.error('Gagal mengekspor laporan ke Excel');
     }
-
-    rows.push(['SKU', 'Produk', 'Stok', 'Harga Modal', 'Harga Jual', 'Nilai (Modal)', 'Nilai (Jual)', 'Status']);
-    filteredInventory.forEach(item => {
-      rows.push([
-        item.sku,
-        item.product_name,
-        item.current_stock,
-        item.cost_price_idr,
-        item.selling_price_idr,
-        item.stock_value_cost,
-        item.stock_value_selling,
-        item.status,
-      ]);
-    });
-
-    saveExcel(`laporan-inventori-${todayStamp()}.xlsx`, 'Inventori', rows, [
-      { wch: 16 }, { wch: 28 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 12 },
-    ]);
-    toast.success('Laporan Inventori (Excel) berhasil diunduh!');
   };
 
-  const exportMovementExcel = () => {
-    const rows: (string | number)[][] = [['Laporan Pergerakan Stok']];
-    rows.push([`Dicetak: ${printedAt()}`]);
-    rows.push([]);
-
-    rows.push(['Tanggal', 'SKU', 'Produk', 'Tipe', 'Qty', 'Keterangan']);
-    filteredMovements.forEach(m => {
-      rows.push([
-        m.date,
-        m.sku,
-        m.name,
-        m.type === 'in' ? 'Masuk' : m.type === 'out' ? 'Keluar' : 'Penyesuaian',
-        m.qty,
-        m.reason,
-      ]);
-    });
-
-    saveExcel(`laporan-pergerakan-stok-${todayStamp()}.xlsx`, 'Pergerakan Stok', rows, [
-      { wch: 22 }, { wch: 16 }, { wch: 28 }, { wch: 12 }, { wch: 8 }, { wch: 30 },
-    ]);
-    toast.success('Laporan Pergerakan Stok (Excel) berhasil diunduh!');
+  const exportMovementExcel = async () => {
+    try {
+      await downloadExcelReport(`laporan-pergerakan-stok-${todayStamp()}.xlsx`, 'Pergerakan Stok', {
+        title: 'Laporan Pergerakan Stok',
+        subtitles: [`Dicetak: ${printedAt()}`],
+        summary: [],
+        columns: [
+          { header: 'Tanggal', width: 22 },
+          { header: 'SKU', width: 16 },
+          { header: 'Produk', width: 30 },
+          { header: 'Tipe', width: 12, align: 'center' },
+          { header: 'Qty', width: 8, align: 'right', numFmt: '#,##0' },
+          { header: 'Keterangan', width: 34 },
+        ],
+        rows: filteredMovements.map(m => [
+          m.date,
+          m.sku,
+          m.name,
+          m.type === 'in' ? 'Masuk' : m.type === 'out' ? 'Keluar' : 'Penyesuaian',
+          m.qty,
+          m.reason,
+        ]),
+      });
+      toast.success('Laporan Pergerakan Stok (Excel) berhasil diunduh!');
+    } catch (err) {
+      console.error('Failed to export movement report to Excel', err);
+      toast.error('Gagal mengekspor laporan ke Excel');
+    }
   };
 
-  const handleExportExcel = () => {
-    if (activeTab === 'sales') exportSalesExcel();
-    else if (activeTab === 'inventory') exportInventoryExcel();
-    else exportMovementExcel();
+  const handleExportExcel = async () => {
+    if (activeTab === 'sales') await exportSalesExcel();
+    else if (activeTab === 'inventory') await exportInventoryExcel();
+    else await exportMovementExcel();
   };
 
   return (
@@ -609,22 +797,22 @@ export default function BranchReports() {
           )}
         </button>
         <button
-          onClick={() => setActiveTab('inventory')}
-          className={`pb-3 font-semibold text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'inventory' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
-        >
-          <Package className="w-4 h-4" />
-          Laporan Inventori
-          {activeTab === 'inventory' && (
-            <motion.div layoutId="report-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
-          )}
-        </button>
-        <button
           onClick={() => setActiveTab('movement')}
           className={`pb-3 font-semibold text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'movement' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
         >
           <Activity className="w-4 h-4" />
           Pergerakan Stok
           {activeTab === 'movement' && (
+            <motion.div layoutId="report-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('inventory')}
+          className={`pb-3 font-semibold text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'inventory' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+        >
+          <Package className="w-4 h-4" />
+          Laporan Inventori
+          {activeTab === 'inventory' && (
             <motion.div layoutId="report-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
           )}
         </button>
