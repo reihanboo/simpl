@@ -28,4 +28,6 @@ type OrderItem struct {
 	Qty           int       `gorm:"not null" json:"qty"`
 	UnitPriceIDR  int64     `gorm:"not null" json:"unit_price_idr"`
 	SubtotalIDR   int64     `gorm:"not null" json:"subtotal_idr"`
+
+	Product Product `gorm:"foreignKey:ProductID" json:"product"`
 }
