@@ -3,6 +3,7 @@ package controllers
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -36,9 +37,20 @@ func TestCalculateLoyaltyBalance(t *testing.T) {
 }
 
 func TestValidateLoyaltyReward(t *testing.T) {
-	valid := loyaltyRewardInput{Name: "Member discount", PointsRequired: 500, DiscountAmountIDR: 10_000}
-	if err := validateLoyaltyReward(valid); err != nil {
-		t.Fatalf("valid reward rejected: %v", err)
+	validFixed := loyaltyRewardInput{Name: "Member discount", PointsRequired: 500, DiscountAmountIDR: 10_000}
+	if err := validateLoyaltyReward(validFixed); err != nil {
+		t.Fatalf("valid fixed reward rejected: %v", err)
+	}
+	validPercentage := loyaltyRewardInput{
+		Name: "Member percentage discount", PointsRequired: 500,
+		DiscountType: "percentage", DiscountPercentage: 15,
+		MaxDiscountAmountIDR: loyaltyInt64Pointer(50_000),
+		UsageLimit:           loyaltyIntPointer(100), PerCustomerLimit: loyaltyIntPointer(2),
+		StartsAt: loyaltyTimePointer(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+		EndsAt:   loyaltyTimePointer(time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)),
+	}
+	if err := validateLoyaltyReward(validPercentage); err != nil {
+		t.Fatalf("valid percentage reward rejected: %v", err)
 	}
 
 	invalid := []loyaltyRewardInput{
@@ -47,10 +59,39 @@ func TestValidateLoyaltyReward(t *testing.T) {
 		{Name: "Reward", PointsRequired: maxLoyaltyPointsPerAction + 1, DiscountAmountIDR: 10_000},
 		{Name: "Reward", PointsRequired: 500, DiscountAmountIDR: 0},
 		{Name: "Reward", PointsRequired: 500, DiscountAmountIDR: maxLoyaltyDiscountIDR + 1},
+		{Name: "Reward", PointsRequired: 500, DiscountType: "percentage", DiscountPercentage: 0},
+		{Name: "Reward", PointsRequired: 500, DiscountType: "percentage", DiscountPercentage: 101},
+		{Name: "Reward", PointsRequired: 500, DiscountType: "percentage", DiscountPercentage: 10, DiscountAmountIDR: 100},
+		{Name: "Reward", PointsRequired: 500, DiscountType: "other", DiscountAmountIDR: 10_000},
+		{Name: "Reward", PointsRequired: 500, DiscountAmountIDR: 10_000, UsageLimit: loyaltyIntPointer(0)},
+		{Name: "Reward", PointsRequired: 500, DiscountAmountIDR: 10_000, PerCustomerLimit: loyaltyIntPointer(-1)},
+		{Name: "Reward", PointsRequired: 500, DiscountAmountIDR: 10_000, StartsAt: loyaltyTimePointer(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)), EndsAt: loyaltyTimePointer(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))},
 	}
 	for index, reward := range invalid {
 		if err := validateLoyaltyReward(reward); err == nil {
 			t.Errorf("invalid reward at index %d was accepted", index)
+		}
+	}
+}
+
+func loyaltyIntPointer(value int) *int { return &value }
+
+func loyaltyInt64Pointer(value int64) *int64 { return &value }
+
+func loyaltyTimePointer(value time.Time) *time.Time { return &value }
+
+func TestValidateLoyaltyCustomerIDs(t *testing.T) {
+	firstID := uuid.New()
+	secondID := uuid.New()
+	if err := validateLoyaltyCustomerIDs([]uuid.UUID{firstID, secondID}); err != nil {
+		t.Fatalf("unique customer targets rejected: %v", err)
+	}
+	if err := validateLoyaltyCustomerIDs(nil); err != nil {
+		t.Fatalf("unrestricted customer target rejected: %v", err)
+	}
+	for _, ids := range [][]uuid.UUID{{firstID, firstID}, {uuid.Nil}} {
+		if err := validateLoyaltyCustomerIDs(ids); !errors.Is(err, errLoyaltyCustomerTargetsInvalid) {
+			t.Errorf("invalid customer targets %v: error = %v, want %v", ids, err, errLoyaltyCustomerTargetsInvalid)
 		}
 	}
 }

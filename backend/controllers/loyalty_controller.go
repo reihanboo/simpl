@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"backend/config"
 	"backend/models"
@@ -20,10 +21,20 @@ const maxLoyaltyPointBalance = 2_147_483_647
 const maxLoyaltyDiscountIDR = 1_000_000_000_000
 
 type loyaltyRewardInput struct {
-	Name              string `json:"name" binding:"required,max=255"`
-	PointsRequired    int    `json:"points_required" binding:"required,min=1"`
-	DiscountAmountIDR int64  `json:"discount_amount_idr" binding:"required,min=1"`
-	IsActive          *bool  `json:"is_active"`
+	Name                 string      `json:"name" binding:"required,max=255"`
+	Description          string      `json:"description" binding:"max=1000"`
+	TermsAndConditions   string      `json:"terms_and_conditions" binding:"max=2000"`
+	PointsRequired       int         `json:"points_required" binding:"required,min=1"`
+	DiscountType         string      `json:"discount_type"`
+	DiscountAmountIDR    int64       `json:"discount_amount_idr"`
+	DiscountPercentage   float64     `json:"discount_percentage"`
+	MaxDiscountAmountIDR *int64      `json:"max_discount_amount_idr"`
+	UsageLimit           *int        `json:"usage_limit"`
+	PerCustomerLimit     *int        `json:"per_customer_limit"`
+	StartsAt             *time.Time  `json:"starts_at"`
+	EndsAt               *time.Time  `json:"ends_at"`
+	CustomerIDs          []uuid.UUID `json:"customer_ids"`
+	IsActive             *bool       `json:"is_active"`
 }
 
 type loyaltyPointsInput struct {
@@ -38,11 +49,13 @@ type loyaltyRedemptionInput struct {
 }
 
 var (
-	errInsufficientLoyaltyPoints  = errors.New("insufficient loyalty points")
-	errLoyaltyMembershipInactive  = errors.New("loyalty membership inactive")
-	errLoyaltyRewardUnavailable   = errors.New("loyalty reward unavailable")
-	errLoyaltyIdempotencyConflict = errors.New("loyalty request id conflict")
-	errLoyaltyPointsLimit         = errors.New("loyalty points limit exceeded")
+	errInsufficientLoyaltyPoints     = errors.New("insufficient loyalty points")
+	errLoyaltyMembershipInactive     = errors.New("loyalty membership inactive")
+	errLoyaltyRewardUnavailable      = errors.New("loyalty reward unavailable")
+	errLoyaltyRewardLimitReached     = errors.New("loyalty reward limit reached")
+	errLoyaltyCustomerTargetsInvalid = errors.New("selected customers must be unique, valid, and belong to this business")
+	errLoyaltyIdempotencyConflict    = errors.New("loyalty request id conflict")
+	errLoyaltyPointsLimit            = errors.New("loyalty points limit exceeded")
 )
 
 func GetLoyaltyRewards(c *gin.Context) {
@@ -54,6 +67,10 @@ func GetLoyaltyRewards(c *gin.Context) {
 	var rewards []models.LoyaltyReward
 	if err := config.DB.Where("business_id = ?", businessID).Order("is_active DESC, points_required ASC, created_at ASC").Find(&rewards).Error; err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil hadiah loyalitas.")
+		return
+	}
+	if err := populateLoyaltyRewardCustomerIDs(config.DB, rewards); err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil target pelanggan hadiah.")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": rewards})
@@ -74,22 +91,34 @@ func CreateLoyaltyReward(c *gin.Context) {
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := validateLoyaltyCustomerIDs(input.CustomerIDs); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	isActive := true
 	if input.IsActive != nil {
 		isActive = *input.IsActive
 	}
-	reward := models.LoyaltyReward{
-		BusinessID:        businessID,
-		Name:              strings.TrimSpace(input.Name),
-		PointsRequired:    input.PointsRequired,
-		DiscountAmountIDR: input.DiscountAmountIDR,
-		IsActive:          isActive,
-	}
-	if err := config.DB.Create(&reward).Error; err != nil {
+	reward := loyaltyRewardFromInput(businessID, input, isActive)
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		if err := validateRewardCustomerOwnership(tx, businessID, input.CustomerIDs); err != nil {
+			return err
+		}
+		if err := tx.Create(&reward).Error; err != nil {
+			return err
+		}
+		return replaceLoyaltyRewardCustomers(tx, reward.ID, input.CustomerIDs)
+	})
+	if err != nil {
+		if errors.Is(err, errLoyaltyCustomerTargetsInvalid) {
+			utils.RespondError(c, http.StatusBadRequest, err.Error())
+			return
+		}
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat hadiah loyalitas.")
 		return
 	}
+	reward.CustomerIDs = append([]uuid.UUID{}, input.CustomerIDs...)
 	c.JSON(http.StatusCreated, gin.H{"reward": reward})
 }
 
@@ -113,24 +142,41 @@ func UpdateLoyaltyReward(c *gin.Context) {
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := validateLoyaltyCustomerIDs(input.CustomerIDs); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	isActive := true
 	if input.IsActive != nil {
 		isActive = *input.IsActive
 	}
-	result := config.DB.Model(&models.LoyaltyReward{}).
-		Where("id = ? AND business_id = ?", rewardID, businessID).
-		Updates(map[string]interface{}{
-			"name":                strings.TrimSpace(input.Name),
-			"points_required":     input.PointsRequired,
-			"discount_amount_idr": input.DiscountAmountIDR,
-			"is_active":           isActive,
-		})
-	if result.Error != nil {
+	var missing bool
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		if err := validateRewardCustomerOwnership(tx, businessID, input.CustomerIDs); err != nil {
+			return err
+		}
+		result := tx.Model(&models.LoyaltyReward{}).
+			Where("id = ? AND business_id = ?", rewardID, businessID).
+			Updates(loyaltyRewardUpdates(input, isActive))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			missing = true
+			return nil
+		}
+		return replaceLoyaltyRewardCustomers(tx, rewardID, input.CustomerIDs)
+	})
+	if err != nil {
+		if errors.Is(err, errLoyaltyCustomerTargetsInvalid) {
+			utils.RespondError(c, http.StatusBadRequest, err.Error())
+			return
+		}
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui hadiah loyalitas.")
 		return
 	}
-	if result.RowsAffected == 0 {
+	if missing {
 		utils.RespondError(c, http.StatusNotFound, "Hadiah loyalitas tidak ditemukan.")
 		return
 	}
@@ -140,6 +186,7 @@ func UpdateLoyaltyReward(c *gin.Context) {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil hadiah loyalitas.")
 		return
 	}
+	reward.CustomerIDs = append([]uuid.UUID{}, input.CustomerIDs...)
 	c.JSON(http.StatusOK, gin.H{"reward": reward})
 }
 
@@ -316,11 +363,47 @@ func RedeemLoyaltyReward(c *gin.Context) {
 			}
 			return err
 		}
+		now := time.Now()
+		if (reward.StartsAt != nil && now.Before(*reward.StartsAt)) || (reward.EndsAt != nil && !now.Before(*reward.EndsAt)) {
+			return errLoyaltyRewardUnavailable
+		}
+		if reward.UsageLimit != nil && reward.UsageCount >= *reward.UsageLimit {
+			return errLoyaltyRewardLimitReached
+		}
+		var targetCount int64
+		if err := tx.Model(&models.LoyaltyRewardCustomer{}).
+			Where("reward_id = ?", reward.ID).Count(&targetCount).Error; err != nil {
+			return err
+		}
+		if targetCount > 0 {
+			var eligible int64
+			if err := tx.Model(&models.LoyaltyRewardCustomer{}).
+				Where("reward_id = ? AND customer_id = ?", reward.ID, customerID).Count(&eligible).Error; err != nil {
+				return err
+			}
+			if eligible == 0 {
+				return errLoyaltyRewardUnavailable
+			}
+		}
+		if reward.PerCustomerLimit != nil {
+			var customerRedemptions int64
+			if err := tx.Model(&models.LoyaltyPointLog{}).
+				Where("reward_id = ? AND customer_id = ? AND type = ?", reward.ID, customerID, "redeemed").
+				Count(&customerRedemptions).Error; err != nil {
+				return err
+			}
+			if customerRedemptions >= int64(*reward.PerCustomerLimit) {
+				return errLoyaltyRewardLimitReached
+			}
+		}
 		newBalance, err := calculateLoyaltyBalance(customer.LoyaltyPoints, -reward.PointsRequired)
 		if err != nil {
 			return err
 		}
 		if err := tx.Model(&customer).Update("loyalty_points", newBalance).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&reward).UpdateColumn("usage_count", gorm.Expr("usage_count + 1")).Error; err != nil {
 			return err
 		}
 		actor := actorID
@@ -329,17 +412,20 @@ func RedeemLoyaltyReward(c *gin.Context) {
 		business := businessID
 		balanceAfter := newBalance
 		entry = models.LoyaltyPointLog{
-			BusinessID:         &business,
-			CustomerID:         customerID,
-			ActorUserID:        &actor,
-			RewardID:           &rewardRef,
-			RewardName:         reward.Name,
-			DiscountAmountIDR:  reward.DiscountAmountIDR,
-			PointsChanged:      -reward.PointsRequired,
-			PointsBalanceAfter: &balanceAfter,
-			Reason:             "Penukaran hadiah: " + reward.Name,
-			Type:               "redeemed",
-			RequestID:          &request,
+			BusinessID:           &business,
+			CustomerID:           customerID,
+			ActorUserID:          &actor,
+			RewardID:             &rewardRef,
+			RewardName:           reward.Name,
+			DiscountAmountIDR:    reward.DiscountAmountIDR,
+			DiscountType:         reward.DiscountType,
+			DiscountPercentage:   reward.DiscountPercentage,
+			MaxDiscountAmountIDR: reward.MaxDiscountAmountIDR,
+			PointsChanged:        -reward.PointsRequired,
+			PointsBalanceAfter:   &balanceAfter,
+			Reason:               "Penukaran hadiah: " + reward.Name,
+			Type:                 "redeemed",
+			RequestID:            &request,
 		}
 		return tx.Create(&entry).Error
 	})
@@ -366,10 +452,150 @@ func calculateLoyaltyBalance(current, change int) (int, error) {
 }
 
 func validateLoyaltyReward(input loyaltyRewardInput) error {
-	if strings.TrimSpace(input.Name) == "" || input.PointsRequired < 1 || input.PointsRequired > maxLoyaltyPointsPerAction || input.DiscountAmountIDR < 1 || input.DiscountAmountIDR > maxLoyaltyDiscountIDR {
-		return errors.New("Nama hadiah wajib diisi, poin harus valid, dan diskon harus antara Rp1 sampai Rp1.000.000.000.000.")
+	discountType := normalizedLoyaltyDiscountType(input.DiscountType)
+	if strings.TrimSpace(input.Name) == "" || input.PointsRequired < 1 || input.PointsRequired > maxLoyaltyPointsPerAction {
+		return errors.New("Nama hadiah wajib diisi dan poin harus antara 1 sampai 1.000.000.")
+	}
+	if discountType == "fixed" {
+		if input.DiscountAmountIDR < 1 || input.DiscountAmountIDR > maxLoyaltyDiscountIDR || input.DiscountPercentage != 0 || input.MaxDiscountAmountIDR != nil {
+			return errors.New("Diskon tetap harus antara Rp1 sampai Rp1.000.000.000.000 dan tidak boleh memakai batas diskon persentase.")
+		}
+	} else if discountType == "percentage" {
+		if input.DiscountAmountIDR != 0 || input.DiscountPercentage <= 0 || input.DiscountPercentage > 100 {
+			return errors.New("Diskon persentase harus lebih dari 0 sampai 100 dan tidak boleh mengisi nominal diskon tetap.")
+		}
+		if input.MaxDiscountAmountIDR != nil && (*input.MaxDiscountAmountIDR < 1 || *input.MaxDiscountAmountIDR > maxLoyaltyDiscountIDR) {
+			return errors.New("Batas nominal diskon persentase harus antara Rp1 sampai Rp1.000.000.000.000.")
+		}
+	} else {
+		return errors.New("Tipe diskon harus fixed atau percentage.")
+	}
+	if input.UsageLimit != nil && (*input.UsageLimit < 1 || *input.UsageLimit > maxLoyaltyPointBalance) {
+		return errors.New("Batas total penukaran harus antara 1 sampai 2.147.483.647.")
+	}
+	if input.PerCustomerLimit != nil && (*input.PerCustomerLimit < 1 || *input.PerCustomerLimit > maxLoyaltyPointBalance) {
+		return errors.New("Batas penukaran per pelanggan harus antara 1 sampai 2.147.483.647.")
+	}
+	if input.StartsAt != nil && input.EndsAt != nil && !input.EndsAt.After(*input.StartsAt) {
+		return errors.New("Waktu berakhir harus setelah waktu mulai.")
 	}
 	return nil
+}
+
+func validateLoyaltyCustomerIDs(customerIDs []uuid.UUID) error {
+	seen := make(map[uuid.UUID]struct{}, len(customerIDs))
+	for _, customerID := range customerIDs {
+		if customerID == uuid.Nil {
+			return errLoyaltyCustomerTargetsInvalid
+		}
+		if _, exists := seen[customerID]; exists {
+			return errLoyaltyCustomerTargetsInvalid
+		}
+		seen[customerID] = struct{}{}
+	}
+	return nil
+}
+
+func validateRewardCustomerOwnership(tx *gorm.DB, businessID uuid.UUID, customerIDs []uuid.UUID) error {
+	if len(customerIDs) == 0 {
+		return nil
+	}
+	var count int64
+	if err := tx.Model(&models.Customer{}).
+		Where("business_id = ? AND deleted_at IS NULL AND id IN ?", businessID, customerIDs).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count != int64(len(customerIDs)) {
+		return errLoyaltyCustomerTargetsInvalid
+	}
+	return nil
+}
+
+func replaceLoyaltyRewardCustomers(tx *gorm.DB, rewardID uuid.UUID, customerIDs []uuid.UUID) error {
+	if err := tx.Where("reward_id = ?", rewardID).Delete(&models.LoyaltyRewardCustomer{}).Error; err != nil {
+		return err
+	}
+	if len(customerIDs) == 0 {
+		return nil
+	}
+	assignments := make([]models.LoyaltyRewardCustomer, 0, len(customerIDs))
+	for _, customerID := range customerIDs {
+		assignments = append(assignments, models.LoyaltyRewardCustomer{RewardID: rewardID, CustomerID: customerID})
+	}
+	return tx.Create(&assignments).Error
+}
+
+func populateLoyaltyRewardCustomerIDs(db *gorm.DB, rewards []models.LoyaltyReward) error {
+	for i := range rewards {
+		rewards[i].CustomerIDs = make([]uuid.UUID, 0)
+	}
+	if len(rewards) == 0 {
+		return nil
+	}
+	rewardIDs := make([]uuid.UUID, 0, len(rewards))
+	for _, reward := range rewards {
+		rewardIDs = append(rewardIDs, reward.ID)
+	}
+	var assignments []models.LoyaltyRewardCustomer
+	if err := db.Where("reward_id IN ?", rewardIDs).Order("customer_id ASC").Find(&assignments).Error; err != nil {
+		return err
+	}
+	indexByRewardID := make(map[uuid.UUID]int, len(rewards))
+	for index := range rewards {
+		indexByRewardID[rewards[index].ID] = index
+	}
+	for _, assignment := range assignments {
+		if index, found := indexByRewardID[assignment.RewardID]; found {
+			rewards[index].CustomerIDs = append(rewards[index].CustomerIDs, assignment.CustomerID)
+		}
+	}
+	return nil
+}
+
+func normalizedLoyaltyDiscountType(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "fixed"
+	}
+	return value
+}
+
+func loyaltyRewardFromInput(businessID uuid.UUID, input loyaltyRewardInput, isActive bool) models.LoyaltyReward {
+	return models.LoyaltyReward{
+		BusinessID:           businessID,
+		Name:                 strings.TrimSpace(input.Name),
+		Description:          strings.TrimSpace(input.Description),
+		TermsAndConditions:   strings.TrimSpace(input.TermsAndConditions),
+		PointsRequired:       input.PointsRequired,
+		DiscountType:         normalizedLoyaltyDiscountType(input.DiscountType),
+		DiscountAmountIDR:    input.DiscountAmountIDR,
+		DiscountPercentage:   input.DiscountPercentage,
+		MaxDiscountAmountIDR: input.MaxDiscountAmountIDR,
+		UsageLimit:           input.UsageLimit,
+		PerCustomerLimit:     input.PerCustomerLimit,
+		StartsAt:             input.StartsAt,
+		EndsAt:               input.EndsAt,
+		IsActive:             isActive,
+	}
+}
+
+func loyaltyRewardUpdates(input loyaltyRewardInput, isActive bool) map[string]interface{} {
+	return map[string]interface{}{
+		"name":                    strings.TrimSpace(input.Name),
+		"description":             strings.TrimSpace(input.Description),
+		"terms_and_conditions":    strings.TrimSpace(input.TermsAndConditions),
+		"points_required":         input.PointsRequired,
+		"discount_type":           normalizedLoyaltyDiscountType(input.DiscountType),
+		"discount_amount_idr":     input.DiscountAmountIDR,
+		"discount_percentage":     input.DiscountPercentage,
+		"max_discount_amount_idr": input.MaxDiscountAmountIDR,
+		"usage_limit":             input.UsageLimit,
+		"per_customer_limit":      input.PerCustomerLimit,
+		"starts_at":               input.StartsAt,
+		"ends_at":                 input.EndsAt,
+		"is_active":               isActive,
+	}
 }
 
 func currentLoyaltyActorID(c *gin.Context) (uuid.UUID, bool) {
@@ -425,7 +651,9 @@ func handleLoyaltyMutationError(c *gin.Context, err error) {
 	case errors.Is(err, errLoyaltyMembershipInactive):
 		utils.RespondError(c, http.StatusConflict, "Pelanggan belum bergabung dengan program loyalitas.")
 	case errors.Is(err, errLoyaltyRewardUnavailable):
-		utils.RespondError(c, http.StatusConflict, "Hadiah tidak tersedia atau sudah dinonaktifkan.")
+		utils.RespondError(c, http.StatusConflict, "Hadiah tidak tersedia untuk pelanggan ini, belum berlaku, atau sudah dinonaktifkan.")
+	case errors.Is(err, errLoyaltyRewardLimitReached):
+		utils.RespondError(c, http.StatusConflict, "Batas penukaran hadiah sudah tercapai.")
 	case errors.Is(err, errLoyaltyIdempotencyConflict):
 		utils.RespondError(c, http.StatusConflict, "ID permintaan sudah digunakan untuk aksi loyalitas yang berbeda.")
 	case errors.Is(err, errLoyaltyPointsLimit):

@@ -204,18 +204,46 @@ loyalty_rewards [icon: award, color: teal] {
   id uuid pk
   business_id uuid
   name string
+  description string
+  terms_and_conditions string
   points_required int
-  discount_amount_idr bigint
+  discount_type string // fixed | percentage
+  discount_amount_idr bigint // used for fixed discounts
+  discount_percentage decimal // 0-100; used for percentage discounts
+  max_discount_amount_idr bigint // optional cap for percentage discounts
+  usage_limit int // null = unlimited total redemptions
+  usage_count int
+  per_customer_limit int // null = unlimited per customer
+  starts_at timestamp // null = immediately available
+  ends_at timestamp // null = no expiry
   is_active boolean
+  created_at timestamp
+  updated_at timestamp
+}
+
+loyalty_reward_customers [icon: users, color: teal] {
+  reward_id uuid pk
+  customer_id uuid pk
   created_at timestamp
 }
 
 loyalty_point_logs [icon: gift, color: teal] {
   id uuid pk
+  business_id uuid
   customer_id uuid
+  actor_user_id uuid
   order_id uuid
+  reward_id uuid
+  reward_name string // snapshot retained if reward is later edited
+  discount_type string // snapshot at redemption
+  discount_amount_idr bigint // snapshot at redemption
+  discount_percentage decimal // snapshot at redemption
+  max_discount_amount_idr bigint // snapshot at redemption
   points_changed int // positive for earn, negative for redeem
-  type string // earned | redeemed | expired
+  points_balance_after int
+  reason string
+  type string // earned | redeemed | expired | adjustment
+  request_id uuid // idempotency key
   created_at timestamp
 }
 
@@ -349,8 +377,13 @@ order_items.order_id > orders.id
 order_items.product_id > products.id
 customers.business_id > businesses.id
 loyalty_rewards.business_id > businesses.id
+loyalty_reward_customers.reward_id > loyalty_rewards.id
+loyalty_reward_customers.customer_id > customers.id
+loyalty_point_logs.business_id > businesses.id
 loyalty_point_logs.customer_id > customers.id
+loyalty_point_logs.actor_user_id > users.id
 loyalty_point_logs.order_id > orders.id
+loyalty_point_logs.reward_id > loyalty_rewards.id
 
 // Employees & Scheduling
 employee_schedules.business_member_id > business_members.id

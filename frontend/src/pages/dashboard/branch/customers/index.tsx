@@ -81,8 +81,12 @@ type CustomerDetailResponse = {
     points_balance_after?: number | null;
     type: string;
     reason?: string;
+    reward_id?: string | null;
     reward_name?: string;
+    discount_type?: 'fixed' | 'percentage';
     discount_amount_idr?: number;
+    discount_percentage?: number;
+    max_discount_amount_idr?: number | null;
     created_at: string;
   }>;
 };
@@ -118,6 +122,36 @@ const formatRupiah = (amount: number) =>
     currency: 'IDR',
     maximumFractionDigits: 0,
   }).format(amount);
+
+const formatRewardDiscount = (reward: LoyaltyReward) => reward.discount_type === 'percentage'
+  ? `${reward.discount_percentage}%${reward.max_discount_amount_idr ? ` (maks. ${formatRupiah(reward.max_discount_amount_idr)})` : ''}`
+  : formatRupiah(reward.discount_amount_idr);
+
+const toDateTimeInputValue = (value: string | null | undefined) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+};
+
+const getRewardUnavailableReason = (
+  reward: LoyaltyReward,
+  customerLogs: CustomerDetailResponse['loyalty_point_logs'] = [],
+  customerID?: string,
+) => {
+  const now = Date.now();
+  if (!reward.is_active) return 'Nonaktif';
+  if (reward.starts_at && new Date(reward.starts_at).getTime() > now) return `Mulai ${formatDateTime(reward.starts_at)}`;
+  if (reward.ends_at && new Date(reward.ends_at).getTime() <= now) return 'Masa berlaku berakhir';
+  if (reward.usage_limit != null && reward.usage_count >= reward.usage_limit) return 'Kuota habis';
+  if (reward.customer_ids.length > 0 && (!customerID || !reward.customer_ids.includes(customerID))) return 'Khusus pelanggan terpilih';
+  if (reward.per_customer_limit != null) {
+    const redemptions = customerLogs.filter((log) => log.type === 'redeemed' && log.reward_id === reward.id).length;
+    if (redemptions >= reward.per_customer_limit) return 'Batas per pelanggan tercapai';
+  }
+  return '';
+};
 
 const formatLastVisit = (value: string | null) => {
   if (!value) return 'Belum ada kunjungan';
@@ -431,7 +465,16 @@ export default function CustomersIndex() {
   const handleRedeemReward = async () => {
     if (!branchId || !detail || !selectedRewardID) return;
     const selectedReward = availableRewards.find((reward) => reward.id === selectedRewardID);
-    if (!selectedReward || detail.customer.loyalty_points < selectedReward.points_required) return;
+    if (!selectedReward) return;
+    const unavailableReason = getRewardUnavailableReason(selectedReward, detail.loyalty_point_logs, detail.customer.id);
+    if (unavailableReason) {
+      setPointsError(unavailableReason);
+      return;
+    }
+    if (detail.customer.loyalty_points < selectedReward.points_required) {
+      setPointsError('Saldo poin tidak cukup untuk menukar hadiah ini.');
+      return;
+    }
     setIsAdjustingPoints(true);
     setPointsError('');
     const requestID = redemptionRequestID || crypto.randomUUID();
@@ -805,10 +848,26 @@ export default function CustomersIndex() {
                       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
                         <select value={selectedRewardID} onChange={(event) => { setSelectedRewardID(event.target.value); setRedemptionRequestID(''); }} aria-label="Pilih hadiah untuk ditukar" className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
                           <option value="">Pilih hadiah yang akan ditukar</option>
-                          {availableRewards.map((reward) => <option key={reward.id} value={reward.id} disabled={detail.customer.loyalty_points < reward.points_required}>{reward.name} — {reward.points_required.toLocaleString('id-ID')} poin · diskon {formatRupiah(reward.discount_amount_idr)}</option>)}
+                          {availableRewards.map((reward) => {
+                            const unavailableReason = getRewardUnavailableReason(reward, detail.loyalty_point_logs, detail.customer.id);
+                            const lacksPoints = detail.customer.loyalty_points < reward.points_required;
+                            return <option key={reward.id} value={reward.id} disabled={Boolean(unavailableReason) || lacksPoints}>{reward.name} — {reward.points_required.toLocaleString('id-ID')} poin · {formatRewardDiscount(reward)}{unavailableReason ? ` · ${unavailableReason}` : lacksPoints ? ' · poin tidak cukup' : ''}</option>;
+                          })}
                         </select>
-                        <button type="button" disabled={isAdjustingPoints || !selectedRewardID || !availableRewards.some((reward) => reward.id === selectedRewardID && reward.is_active && detail.customer.loyalty_points >= reward.points_required)} onClick={() => void handleRedeemReward()} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-800 disabled:opacity-50">Tukar hadiah</button>
+                        <button type="button" disabled={isAdjustingPoints || !selectedRewardID || !availableRewards.some((reward) => reward.id === selectedRewardID && !getRewardUnavailableReason(reward, detail.loyalty_point_logs, detail.customer.id) && detail.customer.loyalty_points >= reward.points_required)} onClick={() => void handleRedeemReward()} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-800 disabled:opacity-50">Tukar hadiah</button>
                       </div>
+                      {selectedRewardID && availableRewards.find((reward) => reward.id === selectedRewardID) && (() => {
+                        const reward = availableRewards.find((item) => item.id === selectedRewardID)!;
+                        const unavailableReason = getRewardUnavailableReason(reward, detail.loyalty_point_logs, detail.customer.id);
+                        return <div className="mt-3 rounded-lg border border-amber-200 bg-white p-3 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-slate-800">{formatRewardDiscount(reward)} · {reward.points_required.toLocaleString('id-ID')} poin</span>{unavailableReason && <span className="text-xs font-semibold text-amber-700">{unavailableReason}</span>}</div>
+                          {reward.description && <p className="mt-1 text-slate-600">{reward.description}</p>}
+                          {reward.terms_and_conditions && <p className="mt-1 text-xs text-slate-500">Syarat: {reward.terms_and_conditions}</p>}
+                          {reward.usage_limit != null && <p className="mt-1 text-xs text-slate-500">Kuota: {reward.usage_count.toLocaleString('id-ID')} / {reward.usage_limit.toLocaleString('id-ID')} penukaran</p>}
+                          {reward.per_customer_limit != null && <p className="mt-1 text-xs text-slate-500">Maksimal {reward.per_customer_limit.toLocaleString('id-ID')} kali per pelanggan</p>}
+                          {(reward.starts_at || reward.ends_at) && <p className="mt-1 text-xs text-slate-500">Masa berlaku: {reward.starts_at ? formatDateTime(reward.starts_at) : 'sekarang'} – {reward.ends_at ? formatDateTime(reward.ends_at) : 'tanpa batas'}</p>}
+                        </div>;
+                      })()}
                       {rewardLoadError && <p role="alert" className="mt-2 text-sm text-red-600">{rewardLoadError}</p>}
                       {pointsError && <p role="alert" className="mt-2 text-sm text-red-600">{pointsError}</p>}
                       <div className="mt-4 border-t border-amber-200 pt-3">
@@ -817,7 +876,7 @@ export default function CustomersIndex() {
                           <ul className="space-y-2">
                             {detail.loyalty_point_logs.slice(0, 10).map((log) => (
                               <li key={log.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-sm text-slate-600">
-                                <span>{log.reward_name ? `Penukaran: ${log.reward_name} (${formatRupiah(log.discount_amount_idr || 0)})` : log.reason || (log.type === 'redeemed' ? 'Penukaran poin' : 'Poin ditambahkan')} · {formatDateTime(log.created_at)}</span>
+                                <span>{log.reward_name ? `Penukaran: ${log.reward_name} (${log.discount_type === 'percentage' ? `${log.discount_percentage || 0}%${log.max_discount_amount_idr ? `, maks. ${formatRupiah(log.max_discount_amount_idr)}` : ''}` : formatRupiah(log.discount_amount_idr || 0)})` : log.reason || (log.type === 'redeemed' ? 'Penukaran poin' : 'Poin ditambahkan')} · {formatDateTime(log.created_at)}</span>
                                 <span className="font-semibold"><span className={log.points_changed < 0 ? 'text-red-600' : 'text-emerald-700'}>{log.points_changed > 0 ? '+' : ''}{log.points_changed}</span>{log.points_balance_after != null && <span className="ml-2 text-xs font-normal text-slate-400">saldo {log.points_balance_after}</span>}</span>
                               </li>
                             ))}
@@ -1021,8 +1080,19 @@ export default function CustomersIndex() {
 type LoyaltyReward = {
   id: string;
   name: string;
+  description: string;
+  terms_and_conditions: string;
   points_required: number;
+  discount_type: 'fixed' | 'percentage';
   discount_amount_idr: number;
+  discount_percentage: number;
+  max_discount_amount_idr: number | null;
+  usage_limit: number | null;
+  usage_count: number;
+  per_customer_limit: number | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  customer_ids: string[];
   is_active: boolean;
 };
 
@@ -1034,9 +1104,24 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState<LoyaltyReward | null>(null);
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [termsAndConditions, setTermsAndConditions] = useState('');
   const [points, setPoints] = useState('');
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
   const [discount, setDiscount] = useState('');
+  const [discountPercentage, setDiscountPercentage] = useState('');
+  const [maxDiscount, setMaxDiscount] = useState('');
+  const [usageLimit, setUsageLimit] = useState('');
+  const [perCustomerLimit, setPerCustomerLimit] = useState('');
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string; phone: string; email: string; membership_active: boolean }>>([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [customerLoadError, setCustomerLoadError] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [targetSpecificCustomers, setTargetSpecificCustomers] = useState(false);
+  const [targetCustomerIDs, setTargetCustomerIDs] = useState<string[]>([]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -1063,17 +1148,69 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
     return () => controller.abort();
   }, [branchId, reloadKey]);
 
+  useEffect(() => {
+    if (!branchId) return;
+    const controller = new AbortController();
+    const loadCustomers = async () => {
+      setCustomersLoading(true);
+      setCustomerLoadError('');
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const allCustomers: Array<{ id: string; name: string; phone: string; email: string; membership_active: boolean }> = [];
+        let total = Number.POSITIVE_INFINITY;
+        let page = 1;
+        while (allCustomers.length < total) {
+          const params = new URLSearchParams({ page: String(page), page_size: '100', type: 'all' });
+          const response = await fetch(`/api/branches/${branchId}/customers?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || 'Gagal memuat daftar pelanggan untuk penargetan hadiah.');
+          const pageCustomers = payload.data || [];
+          allCustomers.push(...pageCustomers);
+          total = Number(payload.total || 0);
+          if (pageCustomers.length === 0) break;
+          page += 1;
+        }
+        setCustomers(allCustomers);
+      } catch (loadError) {
+        if (!controller.signal.aborted) setCustomerLoadError(loadError instanceof Error ? loadError.message : 'Gagal memuat daftar pelanggan.');
+      } finally {
+        if (!controller.signal.aborted) setCustomersLoading(false);
+      }
+    };
+    void loadCustomers();
+    return () => controller.abort();
+  }, [branchId]);
+
   const resetForm = () => {
     setEditing(null);
     setName('');
+    setDescription('');
+    setTermsAndConditions('');
     setPoints('');
+    setDiscountType('fixed');
     setDiscount('');
+    setDiscountPercentage('');
+    setMaxDiscount('');
+    setUsageLimit('');
+    setPerCustomerLimit('');
+    setStartsAt('');
+    setEndsAt('');
     setIsActive(true);
+    setTargetSpecificCustomers(false);
+    setTargetCustomerIDs([]);
+    setCustomerSearch('');
   };
 
   const saveReward = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!branchId) return;
+    if (targetSpecificCustomers && targetCustomerIDs.length === 0) {
+      setError('Pilih setidaknya satu pelanggan atau ubah target hadiah menjadi semua pelanggan.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -1083,8 +1220,18 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           name: name.trim(),
+          description: description.trim(),
+          terms_and_conditions: termsAndConditions.trim(),
           points_required: Number(points),
-          discount_amount_idr: Number(discount),
+          discount_type: discountType,
+          discount_amount_idr: discountType === 'fixed' ? Number(discount) : 0,
+          discount_percentage: discountType === 'percentage' ? Number(discountPercentage) : 0,
+          max_discount_amount_idr: discountType === 'percentage' && maxDiscount ? Number(maxDiscount) : null,
+          usage_limit: usageLimit ? Number(usageLimit) : null,
+          per_customer_limit: perCustomerLimit ? Number(perCustomerLimit) : null,
+          starts_at: startsAt ? new Date(startsAt).toISOString() : null,
+          ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+          customer_ids: targetSpecificCustomers ? targetCustomerIDs : [],
           is_active: isActive,
         }),
       });
@@ -1102,8 +1249,21 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
   const editReward = (reward: LoyaltyReward) => {
     setEditing(reward);
     setName(reward.name);
+    setDescription(reward.description || '');
+    setTermsAndConditions(reward.terms_and_conditions || '');
     setPoints(String(reward.points_required));
-    setDiscount(String(reward.discount_amount_idr));
+    setDiscountType(reward.discount_type || 'fixed');
+    setDiscount(String(reward.discount_amount_idr || ''));
+    setDiscountPercentage(String(reward.discount_percentage || ''));
+    setMaxDiscount(reward.max_discount_amount_idr == null ? '' : String(reward.max_discount_amount_idr));
+    setUsageLimit(reward.usage_limit == null ? '' : String(reward.usage_limit));
+    setPerCustomerLimit(reward.per_customer_limit == null ? '' : String(reward.per_customer_limit));
+    setStartsAt(toDateTimeInputValue(reward.starts_at));
+    setEndsAt(toDateTimeInputValue(reward.ends_at));
+    const assignedCustomerIDs = reward.customer_ids || [];
+    setTargetSpecificCustomers(assignedCustomerIDs.length > 0);
+    setTargetCustomerIDs(assignedCustomerIDs);
+    setCustomerSearch('');
     setIsActive(reward.is_active);
   };
 
@@ -1143,18 +1303,92 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
         <form onSubmit={saveReward} className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div>
             <h3 className="font-bold text-slate-900">{editing ? 'Ubah hadiah' : 'Tambah hadiah'}</h3>
-            <p className="mt-1 text-sm text-slate-500">Tentukan jumlah poin dan diskon yang diterima.</p>
+            <p className="mt-1 text-sm text-slate-500">Atur nilai diskon, kuota, dan masa berlaku penukaran.</p>
           </div>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Nama hadiah
-            <input required maxLength={255} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Diskon member Rp10.000" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            <input required maxLength={255} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Diskon member" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+          </label>
+          <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Deskripsi
+            <textarea maxLength={1000} rows={2} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Jelaskan manfaat hadiah ini" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
           </label>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Poin yang dibutuhkan
-            <input required min="1" type="number" value={points} onChange={(event) => setPoints(event.target.value)} placeholder="500" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            <input required min="1" max="1000000" type="number" value={points} onChange={(event) => setPoints(event.target.value)} placeholder="500" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
           </label>
-          <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Nilai diskon (Rp)
-            <input required min="1" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} placeholder="10000" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+          <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Jenis diskon
+            <select value={discountType} onChange={(event) => setDiscountType(event.target.value as 'fixed' | 'percentage')} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal">
+              <option value="fixed">Nominal tetap</option>
+              <option value="percentage">Persentase</option>
+            </select>
           </label>
-          {editing && <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-[#21AC3A]" /> Hadiah aktif</label>}
+          {discountType === 'fixed' ? (
+            <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Nilai diskon (Rp)
+              <input required min="1" max="1000000000000" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} placeholder="10000" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            </label>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Diskon (%)
+                <input required min="0.01" max="100" step="0.01" type="number" value={discountPercentage} onChange={(event) => setDiscountPercentage(event.target.value)} placeholder="10" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              </label>
+              <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Batas maksimal (Rp, opsional)
+                <input min="1" max="1000000000000" type="number" value={maxDiscount} onChange={(event) => setMaxDiscount(event.target.value)} placeholder="Tanpa batas" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              </label>
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Kuota total (opsional)
+              <input min="1" max="2147483647" type="number" value={usageLimit} onChange={(event) => setUsageLimit(event.target.value)} placeholder="Tanpa batas" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            </label>
+            <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Maks. per pelanggan (opsional)
+              <input min="1" max="2147483647" type="number" value={perCustomerLimit} onChange={(event) => setPerCustomerLimit(event.target.value)} placeholder="Tanpa batas" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Mulai berlaku (opsional)
+              <input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            </label>
+            <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Berakhir (opsional)
+              <input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} min={startsAt || undefined} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            </label>
+          </div>
+          <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Syarat dan ketentuan
+            <textarea maxLength={2000} rows={3} value={termsAndConditions} onChange={(event) => setTermsAndConditions(event.target.value)} placeholder="Contoh: tidak dapat digabungkan dengan promo lain" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+          </label>
+          <fieldset className="space-y-3 rounded-xl border border-slate-200 p-3">
+            <legend className="px-1 text-sm font-semibold text-slate-700">Penerima hadiah</legend>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="radio" name="reward-audience" checked={!targetSpecificCustomers} onChange={() => { setTargetSpecificCustomers(false); setTargetCustomerIDs([]); }} className="mt-0.5 accent-[#21AC3A]" />
+              <span><span className="block font-medium">Semua pelanggan</span><span className="text-xs text-slate-500">Hadiah bisa ditukar semua anggota program loyalitas.</span></span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="radio" name="reward-audience" checked={targetSpecificCustomers} onChange={() => setTargetSpecificCustomers(true)} className="mt-0.5 accent-[#21AC3A]" />
+              <span><span className="block font-medium">Pelanggan tertentu</span><span className="text-xs text-slate-500">Hanya pelanggan yang dipilih yang dapat menukar hadiah.</span></span>
+            </label>
+            {targetSpecificCustomers && (
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-slate-500">{targetCustomerIDs.length} pelanggan dipilih</p>
+                  <div className="flex gap-3 text-xs font-semibold">
+                    <button type="button" disabled={customersLoading || customers.length === 0} onClick={() => setTargetCustomerIDs((selected) => Array.from(new Set([...selected, ...customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).map((customer) => customer.id)])))} className="text-emerald-700 disabled:opacity-50">Pilih hasil</button>
+                    <button type="button" onClick={() => setTargetCustomerIDs([])} className="text-slate-500">Hapus pilihan</button>
+                  </div>
+                </div>
+                <input type="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Cari nama, email, atau telepon" aria-label="Cari pelanggan untuk target hadiah" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                {customerLoadError && <p role="alert" className="text-xs text-red-600">{customerLoadError}</p>}
+                <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200">
+                  {customersLoading ? <p className="p-3 text-sm text-slate-500">Memuat pelanggan...</p> : customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).length === 0 ? (
+                    <p className="p-3 text-sm text-slate-500">Pelanggan tidak ditemukan.</p>
+                  ) : customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).map((customer) => (
+                    <label key={customer.id} className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-0 hover:bg-slate-50">
+                      <input type="checkbox" checked={targetCustomerIDs.includes(customer.id)} onChange={() => setTargetCustomerIDs((selected) => selected.includes(customer.id) ? selected.filter((id) => id !== customer.id) : [...selected, customer.id])} className="h-4 w-4 accent-[#21AC3A]" />
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{customer.name}</span><span className="block truncate text-xs text-slate-500">{customer.phone || customer.email || 'Tidak ada kontak'}</span></span>
+                      <span className={`shrink-0 text-[10px] font-semibold ${customer.membership_active ? 'text-emerald-700' : 'text-slate-400'}`}>{customer.membership_active ? 'Member' : 'Non-member'}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </fieldset>
+          <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-[#21AC3A]" /> Hadiah aktif</label>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d9732] disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{editing ? 'Simpan perubahan' : 'Tambah hadiah'}</button>
             {editing && <button type="button" onClick={resetForm} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Batal</button>}
@@ -1174,7 +1408,15 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
                 <article key={reward.id} className="flex flex-wrap items-center justify-between gap-4 p-5">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2"><h4 className="font-semibold text-slate-900">{reward.name}</h4><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${reward.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{reward.is_active ? 'Aktif' : 'Nonaktif'}</span></div>
-                    <p className="mt-1 text-sm text-slate-500">{reward.points_required.toLocaleString('id-ID')} poin <span className="mx-1">·</span> Diskon {formatRupiah(reward.discount_amount_idr)}</p>
+                    <p className="mt-1 text-sm text-slate-600">{reward.points_required.toLocaleString('id-ID')} poin <span className="mx-1">·</span> Diskon {formatRewardDiscount(reward)}</p>
+                    {reward.description && <p className="mt-1 text-sm text-slate-500">{reward.description}</p>}
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                      {reward.usage_limit != null && <span className="rounded-full bg-slate-100 px-2 py-1">Kuota {reward.usage_count.toLocaleString('id-ID')} / {reward.usage_limit.toLocaleString('id-ID')}</span>}
+                      {reward.per_customer_limit != null && <span className="rounded-full bg-slate-100 px-2 py-1">Maks. {reward.per_customer_limit.toLocaleString('id-ID')} / pelanggan</span>}
+                      {(reward.starts_at || reward.ends_at) && <span className="rounded-full bg-slate-100 px-2 py-1">{reward.starts_at ? formatDateTime(reward.starts_at) : 'Mulai sekarang'} – {reward.ends_at ? formatDateTime(reward.ends_at) : 'tanpa kedaluwarsa'}</span>}
+                    </div>
+                    {reward.terms_and_conditions && <p className="mt-2 text-xs text-slate-400">Syarat: {reward.terms_and_conditions}</p>}
+                    <p className="mt-2 text-xs font-medium text-slate-500">Penerima: {reward.customer_ids.length === 0 ? 'Semua pelanggan' : reward.customer_ids.map((customerID) => customers.find((customer) => customer.id === customerID)?.name || 'Pelanggan').slice(0, 3).join(', ') + (reward.customer_ids.length > 3 ? ` +${reward.customer_ids.length - 3} lainnya` : '')}</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => editReward(reward)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Ubah</button>
