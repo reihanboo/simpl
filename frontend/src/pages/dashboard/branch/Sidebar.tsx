@@ -5,8 +5,8 @@ import {
   ShoppingCart,
   Package,
   Users,
+  UserCog,
   Settings,
-  History,
   TrendingUp,
   ChevronLeft,
   ChevronRight,
@@ -19,9 +19,9 @@ export default function Sidebar({ branchId }: { branchId: string }) {
     { name: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: `/dashboard/branch/${branchId}` },
     { name: 'Point of Sales (POS)', icon: <ShoppingCart className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/pos` },
     { name: 'Inventori & Stok', icon: <Package className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/inventory` },
-    { name: 'Pelanggan (CRM)', icon: <Users className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/crm` },
+    { name: 'Pelanggan (CRS)', icon: <Users className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/crm` },
+    { name: 'Pegawai (EMS)', icon: <UserCog className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/employees` },
     { name: 'Laporan', icon: <TrendingUp className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/reports` },
-    { name: 'Riwayat Transaksi', icon: <History className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/transactions` },
     { name: 'Pengaturan', icon: <Settings className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/settings` },
   ];
 
