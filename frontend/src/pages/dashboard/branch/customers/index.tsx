@@ -78,7 +78,11 @@ type CustomerDetailResponse = {
   loyalty_point_logs: Array<{
     id: string;
     points_changed: number;
+    points_balance_after?: number | null;
     type: string;
+    reason?: string;
+    reward_name?: string;
+    discount_amount_idr?: number;
     created_at: string;
   }>;
 };
@@ -180,11 +184,39 @@ export default function CustomersIndex() {
   const [phone, setPhone] = useState('');
   const [membershipActive, setMembershipActive] = useState(true);
   const [pointsToAdjust, setPointsToAdjust] = useState('');
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [adjustmentRequestID, setAdjustmentRequestID] = useState('');
+  const [selectedRewardID, setSelectedRewardID] = useState('');
+  const [redemptionRequestID, setRedemptionRequestID] = useState('');
+  const [availableRewards, setAvailableRewards] = useState<LoyaltyReward[]>([]);
+  const [rewardLoadError, setRewardLoadError] = useState('');
   const [pointsError, setPointsError] = useState('');
   const [isAdjustingPoints, setIsAdjustingPoints] = useState(false);
   const [activeSection, setActiveSection] = useState<'customers' | 'loyalty'>('customers');
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  useEffect(() => {
+    if (!branchId) return;
+    const controller = new AbortController();
+    const loadRewards = async () => {
+      setRewardLoadError('');
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches/${branchId}/loyalty-rewards`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Gagal memuat pilihan hadiah.');
+        setAvailableRewards((payload.data || []).filter((reward: LoyaltyReward) => reward.is_active));
+      } catch (error) {
+        if (!controller.signal.aborted) setRewardLoadError(error instanceof Error ? error.message : 'Gagal memuat pilihan hadiah.');
+      }
+    };
+    void loadRewards();
+    return () => controller.abort();
+  }, [branchId, activeSection]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -322,6 +354,14 @@ export default function CustomersIndex() {
 
   const handleViewCustomer = async (customer: Customer) => {
     if (!branchId) return;
+    if (detail?.customer.id !== customer.id) {
+      setPointsToAdjust('');
+      setAdjustmentReason('');
+      setAdjustmentRequestID('');
+      setSelectedRewardID('');
+      setRedemptionRequestID('');
+      setPointsError('');
+    }
     setActionMenuCustomerId(null);
     setIsDetailOpen(true);
     setIsDetailLoading(true);
@@ -345,35 +385,72 @@ export default function CustomersIndex() {
     }
   };
 
-  const handleAdjustPoints = async (pointsDelta: number) => {
-    if (!branchId || !detail || !Number.isInteger(pointsDelta) || pointsDelta === 0) return;
+  const refreshCustomerDetail = async () => {
+    if (!detail) return;
+    await handleViewCustomer({
+      id: detail.customer.id,
+      name: detail.customer.name,
+      email: detail.customer.email || '',
+      phone: detail.customer.phone || '',
+      orders: detail.customer.orders,
+      lifetimeValue: detail.customer.lifetime_value_idr,
+      lastVisit: detail.customer.last_visit,
+      type: detail.customer.type,
+      loyaltyPoints: detail.customer.loyalty_points,
+      membershipActive: detail.customer.membership_active,
+    });
+  };
+
+  const handleAdjustPoints = async () => {
+    if (!branchId || !detail || !Number.isInteger(Number(pointsToAdjust)) || Number(pointsToAdjust) === 0 || !adjustmentReason.trim()) return;
     setIsAdjustingPoints(true);
     setPointsError('');
+    const requestID = adjustmentRequestID || crypto.randomUUID();
+    setAdjustmentRequestID(requestID);
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const response = await fetch(`/api/branches/${branchId}/customers/${detail.customer.id}/points`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ points_change: pointsDelta }),
+        body: JSON.stringify({ points_change: Number(pointsToAdjust), reason: adjustmentReason.trim(), request_id: requestID }),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Gagal memperbarui poin pelanggan.');
+      if (!response.ok) throw new Error(payload.error || 'Gagal mencatat penyesuaian poin.');
       setPointsToAdjust('');
+      setAdjustmentReason('');
+      setAdjustmentRequestID('');
       setReloadKey((key) => key + 1);
-      await handleViewCustomer({
-        id: detail.customer.id,
-        name: detail.customer.name,
-        email: detail.customer.email || '',
-        phone: detail.customer.phone || '',
-        orders: detail.customer.orders,
-        lifetimeValue: detail.customer.lifetime_value_idr,
-        lastVisit: detail.customer.last_visit,
-        type: detail.customer.type,
-        loyaltyPoints: detail.customer.loyalty_points,
-        membershipActive: detail.customer.membership_active,
-      });
+      await refreshCustomerDetail();
     } catch (error) {
-      setPointsError(error instanceof Error ? error.message : 'Gagal memperbarui poin pelanggan.');
+      setPointsError(error instanceof Error ? error.message : 'Gagal mencatat penyesuaian poin.');
+    } finally {
+      setIsAdjustingPoints(false);
+    }
+  };
+
+  const handleRedeemReward = async () => {
+    if (!branchId || !detail || !selectedRewardID) return;
+    const selectedReward = availableRewards.find((reward) => reward.id === selectedRewardID);
+    if (!selectedReward || detail.customer.loyalty_points < selectedReward.points_required) return;
+    setIsAdjustingPoints(true);
+    setPointsError('');
+    const requestID = redemptionRequestID || crypto.randomUUID();
+    setRedemptionRequestID(requestID);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(`/api/branches/${branchId}/customers/${detail.customer.id}/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reward_id: selectedRewardID, request_id: requestID }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Gagal menukarkan hadiah.');
+      setSelectedRewardID('');
+      setRedemptionRequestID('');
+      setReloadKey((key) => key + 1);
+      await refreshCustomerDetail();
+    } catch (error) {
+      setPointsError(error instanceof Error ? error.message : 'Gagal menukarkan hadiah.');
     } finally {
       setIsAdjustingPoints(false);
     }
@@ -719,19 +796,30 @@ export default function CustomersIndex() {
                   {detail.customer.membership_active && (
                     <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
                       <div className="flex items-center gap-2 font-semibold text-slate-900"><Coins className="h-4 w-4 text-amber-600" /> Kelola poin loyalitas</div>
-                      <p className="mt-1 text-xs text-slate-500">Tambahkan poin atau catat penukaran poin pelanggan.</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <input type="number" min="1" step="1" value={pointsToAdjust} onChange={(event) => setPointsToAdjust(event.target.value)} aria-label="Jumlah poin" placeholder="Jumlah poin" className="min-w-32 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
-                        <button type="button" disabled={isAdjustingPoints || !Number.isInteger(Number(pointsToAdjust)) || Number(pointsToAdjust) <= 0} onClick={() => void handleAdjustPoints(Math.abs(Number(pointsToAdjust)))} className="rounded-lg bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Tambah poin</button>
-                        <button type="button" disabled={isAdjustingPoints || !Number.isInteger(Number(pointsToAdjust)) || Number(pointsToAdjust) <= 0 || detail.customer.loyalty_points < Number(pointsToAdjust)} onClick={() => void handleAdjustPoints(-Math.abs(Number(pointsToAdjust)))} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Catat penukaran</button>
+                      <p className="mt-1 text-xs text-slate-500">Koreksi saldo wajib disertai alasan. Penukaran hanya bisa dilakukan lewat hadiah aktif dengan saldo poin yang mencukupi.</p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.4fr_auto]">
+                        <input type="number" min="-1000000" max="1000000" step="1" value={pointsToAdjust} onChange={(event) => { setPointsToAdjust(event.target.value); setAdjustmentRequestID(''); }} aria-label="Jumlah poin koreksi" placeholder="+/- jumlah poin" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <input type="text" maxLength={255} value={adjustmentReason} onChange={(event) => { setAdjustmentReason(event.target.value); setAdjustmentRequestID(''); }} aria-label="Alasan penyesuaian poin" placeholder="Alasan, mis. bonus loyalitas" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <button type="button" disabled={isAdjustingPoints || !Number.isInteger(Number(pointsToAdjust)) || Number(pointsToAdjust) === 0 || Math.abs(Number(pointsToAdjust)) > 1000000 || !adjustmentReason.trim()} onClick={() => void handleAdjustPoints()} className="rounded-lg bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Simpan koreksi</button>
                       </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <select value={selectedRewardID} onChange={(event) => { setSelectedRewardID(event.target.value); setRedemptionRequestID(''); }} aria-label="Pilih hadiah untuk ditukar" className="min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                          <option value="">Pilih hadiah yang akan ditukar</option>
+                          {availableRewards.map((reward) => <option key={reward.id} value={reward.id} disabled={detail.customer.loyalty_points < reward.points_required}>{reward.name} — {reward.points_required.toLocaleString('id-ID')} poin · diskon {formatRupiah(reward.discount_amount_idr)}</option>)}
+                        </select>
+                        <button type="button" disabled={isAdjustingPoints || !selectedRewardID || !availableRewards.some((reward) => reward.id === selectedRewardID && reward.is_active && detail.customer.loyalty_points >= reward.points_required)} onClick={() => void handleRedeemReward()} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-800 disabled:opacity-50">Tukar hadiah</button>
+                      </div>
+                      {rewardLoadError && <p role="alert" className="mt-2 text-sm text-red-600">{rewardLoadError}</p>}
                       {pointsError && <p role="alert" className="mt-2 text-sm text-red-600">{pointsError}</p>}
                       <div className="mt-4 border-t border-amber-200 pt-3">
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Aktivitas poin terbaru</p>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Buku besar poin terbaru</p>
                         {detail.loyalty_point_logs.length === 0 ? <p className="text-sm text-slate-500">Belum ada aktivitas poin.</p> : (
-                          <ul className="space-y-1.5">
-                            {detail.loyalty_point_logs.slice(0, 5).map((log) => (
-                              <li key={log.id} className="flex justify-between gap-3 text-sm text-slate-600"><span>{log.type === 'redeemed' ? 'Penukaran' : 'Poin ditambahkan'} · {formatDateTime(log.created_at)}</span><span className={log.points_changed < 0 ? 'text-red-600' : 'text-emerald-700'}>{log.points_changed > 0 ? '+' : ''}{log.points_changed}</span></li>
+                          <ul className="space-y-2">
+                            {detail.loyalty_point_logs.slice(0, 10).map((log) => (
+                              <li key={log.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-sm text-slate-600">
+                                <span>{log.reward_name ? `Penukaran: ${log.reward_name} (${formatRupiah(log.discount_amount_idr || 0)})` : log.reason || (log.type === 'redeemed' ? 'Penukaran poin' : 'Poin ditambahkan')} · {formatDateTime(log.created_at)}</span>
+                                <span className="font-semibold"><span className={log.points_changed < 0 ? 'text-red-600' : 'text-emerald-700'}>{log.points_changed > 0 ? '+' : ''}{log.points_changed}</span>{log.points_balance_after != null && <span className="ml-2 text-xs font-normal text-slate-400">saldo {log.points_balance_after}</span>}</span>
+                              </li>
                             ))}
                           </ul>
                         )}
@@ -1020,7 +1108,7 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
   };
 
   const deleteReward = async (reward: LoyaltyReward) => {
-    if (!branchId || !window.confirm(`Hapus hadiah "${reward.name}"?`)) return;
+    if (!branchId || !window.confirm(`Nonaktifkan hadiah "${reward.name}"? Hadiah tetap tersimpan di riwayat penukaran.`)) return;
     setError('');
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -1029,11 +1117,11 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Gagal menghapus hadiah loyalitas.');
+      if (!response.ok) throw new Error(payload.error || 'Gagal menonaktifkan hadiah loyalitas.');
       if (editing?.id === reward.id) resetForm();
       setReloadKey((key) => key + 1);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Gagal menghapus hadiah loyalitas.');
+      setError(deleteError instanceof Error ? deleteError.message : 'Gagal menonaktifkan hadiah loyalitas.');
     }
   };
 
@@ -1090,7 +1178,7 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => editReward(reward)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Ubah</button>
-                    <button type="button" onClick={() => void deleteReward(reward)} className="rounded-lg border border-red-100 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50">Hapus</button>
+                    <button type="button" disabled={!reward.is_active} onClick={() => void deleteReward(reward)} className="rounded-lg border border-red-100 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">Nonaktifkan</button>
                   </div>
                 </article>
               ))}
@@ -1098,7 +1186,7 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
           )}
         </div>
       </div>
-      <p className="text-xs text-slate-500">Catatan: hadiah dan poin tercatat di profil pelanggan; penerapan diskon hadiah pada POS perlu dihubungkan ke alur checkout.</p>
+      <p className="text-xs text-slate-500">Catatan: koreksi dan penukaran poin tercatat di profil pelanggan. Poin otomatis dari transaksi dan penerapan diskon hadiah memerlukan integrasi POS.</p>
     </section>
   );
 }
