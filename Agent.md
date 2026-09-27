@@ -2,12 +2,15 @@
 
 **SIMPL** is a subscription-based Enterprise Management System designed to streamline operations for businesses ranging from SMEs (UMKM) to larger enterprises. It integrates Point of Sales (POS), advanced Inventory Management, Customer Relationship Management (CRM/CMS), and Human Resources (HR/EMS) into a single, cohesive platform. with the main language in indonesia
 
-## 🛠️ Tech Stack & Architecture
+## Project Conventions
+* **No emoticons:** Do not use emoticons or emojis in code, comments, commit messages, documentation, or chat responses. Use plain text and, where a visual is needed, icons from the project icon library (lucide-react).
+
+## Tech Stack & Architecture
 * **Frontend:** React.js (Recommended: TypeScript with Tailwind CSS to easily replicate the clean, data-dense design language).
 * **Backend:** Golang (Recommended: Gin or Fiber framework for high-performance REST APIs).
 * **Database:** PostgreSQL (Ideal for relational data like transactions, inventory tracking, and user schemas).
 
-## 🎨 UI/UX Design Language (Azure-Inspired)
+## UI/UX Design Language (Azure-Inspired)
 The interface will follow a Microsoft Azure-like aesthetic:
 * **Color Palette:** Deep Green (#21AC3A), crisp whites, and cool grays.
 * **Layout:** A persistent left-hand navigation menu (sidebar) with collapsable groups, top-level breadcrumbs, and a dashboard heavily utilizing modular cards and data grids.
@@ -15,7 +18,7 @@ The interface will follow a Microsoft Azure-like aesthetic:
 
 ---
 
-## 💳 Subscription Packages & Features
+## Subscription Packages & Features
 
 ### 1. UMKM Package - Rp 29.000 / month
 *Designed for small to medium businesses needing robust sales and inventory tracking.*
@@ -31,7 +34,7 @@ The interface will follow a Microsoft Azure-like aesthetic:
   * Comprehensive views of daily, weekly, and monthly sales and inventory reports.
   * User able to chat with Chatbot connected to MCP to access data from database to retrive what user need
 
-**✨ Special Inventory Features:**
+**Special Inventory Features:**
 * **Smart Stock Forecasting:** Utilizes the **Welford Algorithm** and data smoothing techniques to calculate rolling variance and mean of historical sales, accurately predicting the required stock for the upcoming month.
 * **Dynamic Low-Stock Reminders:** Automatically alerts the owner when product stock runs low. 
   * *Logic:* By default, the system triggers a warning when stock drops to **10%** of the original restock quantity. 
