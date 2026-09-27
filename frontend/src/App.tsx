@@ -249,7 +249,7 @@ function LandingPage() {
 
               <div className="mb-8">
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Paket UMKM</h3>
-                <p className="text-slate-500 mb-6 min-h-[48px]">Semua yang UMKM butuhkan untuk jualan lebih rapi dan stok selalu terkontrol. Cukup satu aplikasi.</p>
+                <p className="text-slate-500 mb-6 min-h-12">Semua yang UMKM butuhkan untuk jualan lebih rapi dan stok selalu terkontrol. Cukup satu aplikasi.</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-5xl font-extrabold tracking-tight text-slate-900">Rp 29rb</span>
                   <span className="text-slate-500 font-medium">/ bulan</span>
@@ -280,7 +280,7 @@ function LandingPage() {
             >
               <div className="mb-8">
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Paket Enterprise</h3>
-                <p className="text-slate-500 mb-6 min-h-[48px]">Untuk bisnis yang siap naik level. Kelola pelanggan, bangun loyalitas, dan atur tim dalam satu tempat.</p>
+                <p className="text-slate-500 mb-6 min-h-12">Untuk bisnis yang siap naik level. Kelola pelanggan, bangun loyalitas, dan atur tim dalam satu tempat.</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-5xl font-extrabold tracking-tight text-slate-900">Rp 149rb</span>
                   <span className="text-slate-500 font-medium">/ bulan</span>
