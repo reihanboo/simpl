@@ -14,21 +14,65 @@ import {
   BoxSelect,
   X,
   Loader2,
-  Trash2
+  Trash2,
+  CalendarClock,
+  PackagePlus,
+  Boxes,
+  Timer
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+
+interface ForecastItem {
+  product_id: string;
+  name: string;
+  sku: string;
+  current_stock: number;
+  low_stock_threshold: number;
+  cost_price_idr: number;
+  selling_price_idr: number;
+  avg_daily_demand: number;
+  stddev_daily_demand: number;
+  smoothed_daily_demand: number;
+  predicted_demand: number;
+  safety_stock: number;
+  reorder_point: number;
+  recommended_reorder_qty: number;
+  days_of_cover: number | null;
+  estimated_stockout_date: string | null;
+  priority: 'Tinggi' | 'Sedang' | 'Rendah';
+}
+
+interface ForecastSummary {
+  total_products: number;
+  need_restock: number;
+  critical_count: number;
+  avg_days_of_cover: number;
+  estimated_restock_value_idr: number;
+}
+
+const formatISODate = (iso: string) => {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 export default function BranchInventory() {
   const { id } = useParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStock, setFilterStock] = useState('all');
   const [filterMovement, setFilterMovement] = useState('all');
-  const [activeTab, setActiveTab] = useState<'inventory' | 'movement'>('inventory');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'movement' | 'forecast'>('inventory');
+  const [forecastHorizon, setForecastHorizon] = useState(14);
+  const [forecastFilter, setForecastFilter] = useState('all');
 
   // Data State
   const [products, setProducts] = useState<any[]>([]);
   const [stockMovements, setStockMovements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Forecast State
+  const [forecastItems, setForecastItems] = useState<ForecastItem[]>([]);
+  const [forecastSummary, setForecastSummary] = useState<ForecastSummary | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(true);
 
   // Pagination State
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -67,6 +111,31 @@ export default function BranchInventory() {
   useEffect(() => {
     fetchProductsAndMovements();
   }, [id]);
+
+  const fetchForecast = async () => {
+    setForecastLoading(true);
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const res = await fetch(`/api/branches/${id}/forecast?days=${forecastHorizon}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setForecastItems(data.items || []);
+        setForecastSummary(data.summary || null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stock forecast', err);
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchForecast();
+    }
+  }, [id, forecastHorizon]);
 
   // Modal State
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
@@ -285,11 +354,23 @@ export default function BranchInventory() {
     return matchesSearch && matchesStatus;
   });
 
-  const totalItems = activeTab === 'inventory' ? filteredProducts.length : filteredMovements.length;
+  const filteredForecast = forecastItems.filter(f => {
+    const matchesSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase()) || f.sku.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesPriority = forecastFilter === 'all' ? true : f.priority === forecastFilter;
+    return matchesSearch && matchesPriority;
+  });
+
+  const restockCount = forecastSummary?.need_restock ?? 0;
+  const criticalCount = forecastSummary?.critical_count ?? 0;
+  const avgDaysLeft = forecastSummary?.avg_days_of_cover ?? 0;
+  const restockValue = forecastSummary?.estimated_restock_value_idr ?? 0;
+
+  const totalItems = activeTab === 'inventory' ? filteredProducts.length : activeTab === 'movement' ? filteredMovements.length : filteredForecast.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const paginatedMovements = filteredMovements.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedForecast = filteredForecast.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const safeCount = products.filter(p => p.status === 'Aman').length;
   const lowCount = products.filter(p => p.status === 'Menipis').length;
@@ -321,6 +402,48 @@ export default function BranchInventory() {
         </div>
       </div>
 
+      {activeTab === 'forecast' && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+              <PackagePlus className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Perlu Restock</p>
+              <h3 className="text-2xl font-bold text-slate-900">{restockCount}</h3>
+            </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-red-50 text-red-600 rounded-xl">
+              <CalendarClock className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Prediksi Habis (≤7 hari)</p>
+              <h3 className="text-2xl font-bold text-slate-900">{criticalCount}</h3>
+            </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+              <Timer className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Rata-rata Hari Tersisa</p>
+              <h3 className="text-2xl font-bold text-slate-900">{avgDaysLeft} hari</h3>
+            </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+            <div className="p-3 bg-violet-50 text-violet-600 rounded-xl">
+              <Boxes className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Estimasi Nilai Restock</p>
+              <h3 className="text-2xl font-bold text-slate-900">Rp {restockValue.toLocaleString('id-ID')}</h3>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab !== 'forecast' && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
@@ -359,6 +482,7 @@ export default function BranchInventory() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-slate-200 mb-6">
@@ -380,6 +504,15 @@ export default function BranchInventory() {
             <motion.div layoutId="inventory-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => { setActiveTab('forecast'); setCurrentPage(1); }}
+          className={`pb-3 font-semibold text-sm transition-colors relative ${activeTab === 'forecast' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+        >
+          Stock Forecast
+          {activeTab === 'forecast' && (
+            <motion.div layoutId="inventory-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
+          )}
+        </button>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
@@ -395,6 +528,20 @@ export default function BranchInventory() {
             />
           </div>
           <div className="flex items-center gap-3">
+            {activeTab === 'forecast' && (
+              <div className="flex items-center gap-1 p-1 bg-slate-50 border border-slate-200 rounded-lg text-sm">
+                <span className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Horizon</span>
+                {[7, 14, 30].map((h) => (
+                  <button
+                    key={h}
+                    onClick={() => { setForecastHorizon(h); setCurrentPage(1); }}
+                    className={`px-3 py-1 rounded-md font-semibold transition-colors ${forecastHorizon === h ? 'bg-[#21AC3A] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    {h} hari
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
               <Filter className="w-4 h-4 text-slate-400" />
               {activeTab === 'inventory' ? (
@@ -408,7 +555,7 @@ export default function BranchInventory() {
                   <option value="low">Menipis</option>
                   <option value="out">Habis</option>
                 </select>
-              ) : (
+              ) : activeTab === 'movement' ? (
                 <select
                   className="bg-transparent outline-none cursor-pointer"
                   value={filterMovement}
@@ -418,6 +565,17 @@ export default function BranchInventory() {
                   <option value="in">Barang Masuk</option>
                   <option value="out">Barang Keluar</option>
                   <option value="adj">Penyesuaian (Minus)</option>
+                </select>
+              ) : (
+                <select
+                  className="bg-transparent outline-none cursor-pointer"
+                  value={forecastFilter}
+                  onChange={(e) => { setForecastFilter(e.target.value); setCurrentPage(1); }}
+                >
+                  <option value="all">Semua Prioritas</option>
+                  <option value="Tinggi">Prioritas Tinggi</option>
+                  <option value="Sedang">Prioritas Sedang</option>
+                  <option value="Rendah">Prioritas Rendah</option>
                 </select>
               )}
             </div>
@@ -502,7 +660,7 @@ export default function BranchInventory() {
                   )))}
               </tbody>
             </table>
-          ) : (
+          ) : activeTab === 'movement' ? (
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                 <tr>
@@ -549,6 +707,103 @@ export default function BranchInventory() {
                 ))}
               </tbody>
             </table>
+          ) : (
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Produk</th>
+                  <th className="px-6 py-4 font-semibold">Stok Saat Ini</th>
+                  <th className="px-6 py-4 font-semibold">Permintaan / Hari</th>
+                  <th className="px-6 py-4 font-semibold">Estimasi Habis</th>
+                  <th className="px-6 py-4 font-semibold">Hari Tersisa</th>
+                  <th className="px-6 py-4 font-semibold">Rekomendasi Restock</th>
+                  <th className="px-6 py-4 font-semibold">Prioritas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {forecastLoading ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      <div className="flex flex-col items-center justify-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-[#21AC3A] mb-2" />
+                        <p>Menghitung prediksi stok...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : paginatedForecast.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                      Belum ada produk untuk diprediksi atau tidak ada yang sesuai dengan filter.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedForecast.map((f) => {
+                    const cover = f.days_of_cover;
+                    const stockout = f.estimated_stockout_date;
+                    const coverage = cover !== null
+                      ? Math.max(4, Math.min(100, Math.round((cover / forecastHorizon) * 100)))
+                      : 100;
+                    const barColor = f.priority === 'Tinggi' ? 'bg-red-500' : f.priority === 'Sedang' ? 'bg-amber-500' : 'bg-emerald-500';
+                    const textColor = f.priority === 'Tinggi' ? 'text-red-600' : f.priority === 'Sedang' ? 'text-amber-600' : 'text-emerald-600';
+                    const badgeColor = f.priority === 'Tinggi' ? 'bg-red-100 text-red-700' : f.priority === 'Sedang' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+                    return (
+                      <motion.tr
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        key={f.product_id}
+                        className="hover:bg-slate-50/50 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-slate-900">{f.name}</p>
+                          <p className="text-xs text-slate-500">{f.sku}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-bold text-slate-900">{f.current_stock}</span>
+                          <span className="text-xs text-slate-400"> / min {f.low_stock_threshold}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="font-semibold text-slate-700">{f.smoothed_daily_demand.toFixed(1)} unit</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          {cover !== null && stockout ? (
+                            <>
+                              <p className="font-medium text-slate-700">{formatISODate(stockout)}</p>
+                              <p className={`text-xs font-semibold ${textColor}`}>
+                                {cover < 1 ? 'dalam kurang dari 1 hari' : `dalam ${Math.floor(cover)} hari`}
+                              </p>
+                            </>
+                          ) : (
+                            <span className="text-slate-400">Tidak ada permintaan</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${barColor}`} style={{ width: `${coverage}%` }} />
+                            </div>
+                            <span className={`text-xs font-bold ${textColor}`}>
+                              {cover !== null ? `${Math.floor(cover)}h` : '∞'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {f.recommended_reorder_qty > 0 ? (
+                            <p className="font-bold text-[#21AC3A]">+{f.recommended_reorder_qty} unit</p>
+                          ) : (
+                            <span className="text-xs font-medium text-slate-400">Cukup</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${badgeColor}`}>
+                            {f.priority}
+                          </span>
+                        </td>
+                      </motion.tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           )}
         </div>
         <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
@@ -568,7 +823,7 @@ export default function BranchInventory() {
               <option value={100}>100</option>
             </select>
             <span className="whitespace-nowrap ml-2">
-              Menampilkan {activeTab === 'inventory' ? paginatedProducts.length : paginatedMovements.length} dari {totalItems} data
+              Menampilkan {activeTab === 'inventory' ? paginatedProducts.length : activeTab === 'movement' ? paginatedMovements.length : paginatedForecast.length} dari {totalItems} data
             </span>
           </div>
 
