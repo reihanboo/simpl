@@ -255,3 +255,148 @@ func GetStockForecast(c *gin.Context) {
 		},
 	})
 }
+
+type forecastSeriesPoint struct {
+	Date      string   `json:"date"`
+	Label     string   `json:"label"`
+	Actual    *int     `json:"actual"`
+	Projected *float64 `json:"projected"`
+	Phase     string   `json:"phase"`
+}
+
+// GetProductForecastSeries returns a single product's daily demand history plus
+// the projected daily demand over the horizon, for charting.
+// Query params: product_id (required), days (horizon), lookback, algorithm.
+func GetProductForecastSeries(c *gin.Context) {
+	branchID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "ID cabang tidak valid")
+		return
+	}
+
+	productID, err := uuid.Parse(c.Query("product_id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "product_id tidak valid")
+		return
+	}
+
+	var branch models.Branch
+	if err := config.DB.First(&branch, "id = ?", branchID).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan")
+		return
+	}
+
+	var inv models.BranchInventory
+	if err := config.DB.Preload("Product").
+		Where("branch_id = ? AND product_id = ?", branchID, productID).
+		First(&inv).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Produk tidak ditemukan pada cabang ini")
+		return
+	}
+
+	horizonDays := parseBoundedQuery(c, "days", defaultForecastDays, 1, 180)
+	lookbackDays := parseBoundedQuery(c, "lookback", defaultForecastLookback, 1, 365)
+	algorithm := c.DefaultQuery("algorithm", "ema")
+	if algorithm != "sma" {
+		algorithm = "ema"
+	}
+
+	loc := time.FixedZone("WIB", 7*60*60)
+	today := time.Now().In(loc)
+	todayKey := today.Format("2006-01-02")
+	start := today.AddDate(0, 0, -(lookbackDays - 1))
+	startDate := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+
+	type saleRow struct {
+		SaleDate string
+		Qty      int
+	}
+	var rows []saleRow
+	if err := config.DB.Raw(`
+		SELECT to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') AS sale_date,
+		       COALESCE(SUM(oi.qty), 0)::int AS qty
+		FROM order_items oi
+		JOIN orders o ON o.id = oi.order_id
+		WHERE o.branch_id = ? AND oi.product_id = ?
+		  AND o.payment_status <> 'refunded'
+		  AND (o.created_at AT TIME ZONE 'Asia/Jakarta')::date >= ?::date
+		GROUP BY sale_date
+	`, branchID, productID, startDate.Format("2006-01-02")).Scan(&rows).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal menghitung data penjualan historis")
+		return
+	}
+
+	demand := make([]float64, lookbackDays)
+	for _, row := range rows {
+		day, parseErr := time.ParseInLocation("2006-01-02", row.SaleDate, time.UTC)
+		if parseErr != nil {
+			continue
+		}
+		idx := int(day.Sub(startDate).Hours() / 24)
+		if idx < 0 || idx >= lookbackDays {
+			continue
+		}
+		demand[idx] += float64(row.Qty)
+	}
+
+	stats := utils.AnalyzeDemand(demand, algorithm, forecastEMAAlpha, forecastSMAWindow)
+	smoothed := roundToHundredths(stats.Smoothed)
+
+	points := make([]forecastSeriesPoint, 0, lookbackDays+horizonDays)
+	base := today.AddDate(0, 0, -(lookbackDays - 1))
+	for i := 0; i < lookbackDays; i++ {
+		d := base.AddDate(0, 0, i)
+		key := d.Format("2006-01-02")
+		actual := int(demand[i])
+		point := forecastSeriesPoint{
+			Date:   key,
+			Label:  d.Format("02 Jan"),
+			Actual: &actual,
+			Phase:  "history",
+		}
+		if key == todayKey {
+			projected := smoothed
+			point.Projected = &projected
+			point.Phase = "today"
+		}
+		points = append(points, point)
+	}
+	for i := 1; i <= horizonDays; i++ {
+		d := today.AddDate(0, 0, i)
+		projected := smoothed
+		points = append(points, forecastSeriesPoint{
+			Date:      d.Format("2006-01-02"),
+			Label:     d.Format("02 Jan"),
+			Projected: &projected,
+			Phase:     "forecast",
+		})
+	}
+
+	var daysOfCover *float64
+	var stockoutDate *string
+	if stats.Smoothed > 0 {
+		cover := float64(inv.CurrentStock) / stats.Smoothed
+		daysOfCover = &cover
+		date := today.AddDate(0, 0, int(math.Floor(cover))).Format("2006-01-02")
+		stockoutDate = &date
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"product": gin.H{
+			"product_id":          inv.Product.ID,
+			"name":                inv.Product.Name,
+			"sku":                 inv.Product.SKU,
+			"current_stock":       inv.CurrentStock,
+			"low_stock_threshold": inv.Product.LowStockThreshold,
+		},
+		"lookback_days":           lookbackDays,
+		"horizon_days":            horizonDays,
+		"algorithm":               algorithm,
+		"avg_daily_demand":        roundToHundredths(stats.Mean),
+		"stddev_daily_demand":     roundToHundredths(stats.StdDev),
+		"smoothed_daily_demand":   smoothed,
+		"days_of_cover":           daysOfCover,
+		"estimated_stockout_date": stockoutDate,
+		"points":                  points,
+	})
+}
