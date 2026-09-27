@@ -19,9 +19,11 @@ import (
 const maxCustomerPageSize = 100
 
 type customerInput struct {
-	Name  string `json:"name" binding:"required,max=255"`
-	Phone string `json:"phone" binding:"omitempty,max=20"`
-	Email string `json:"email" binding:"omitempty,email,max=100"`
+	Name                   string `json:"name" binding:"required,max=255"`
+	Phone                  string `json:"phone" binding:"omitempty,max=20"`
+	Email                  string `json:"email" binding:"omitempty,email,max=100"`
+	MembershipActive       *bool  `json:"membership_active"`
+	SpecialDiscountPercent *int   `json:"special_discount_percent"`
 }
 
 type customerSummary struct {
@@ -36,8 +38,8 @@ type customerStats struct {
 	TotalCustomers     int64   `json:"total_customers"`
 	NewCustomers       int64   `json:"new_customers"`
 	ReturningCustomers int64   `json:"returning_customers"`
-	ReturningRate    float64 `json:"returning_rate"`
-	LifetimeValueIDR int64   `json:"lifetime_value_idr"`
+	ReturningRate      float64 `json:"returning_rate"`
+	LifetimeValueIDR   int64   `json:"lifetime_value_idr"`
 }
 
 type customerOrderItemResponse struct {
@@ -50,13 +52,13 @@ type customerOrderItemResponse struct {
 }
 
 type customerOrderResponse struct {
-	ID                uuid.UUID                 `json:"id"`
-	OrderNumber       string                    `json:"order_number"`
-	TotalAmountIDR    int64                     `json:"total_amount_idr"`
-	DiscountAmountIDR int64                     `json:"discount_amount_idr"`
-	PaymentMethod     string                    `json:"payment_method"`
-	PaymentStatus     string                    `json:"payment_status"`
-	CreatedAt         time.Time                 `json:"created_at"`
+	ID                uuid.UUID                   `json:"id"`
+	OrderNumber       string                      `json:"order_number"`
+	TotalAmountIDR    int64                       `json:"total_amount_idr"`
+	DiscountAmountIDR int64                       `json:"discount_amount_idr"`
+	PaymentMethod     string                      `json:"payment_method"`
+	PaymentStatus     string                      `json:"payment_status"`
+	CreatedAt         time.Time                   `json:"created_at"`
 	Items             []customerOrderItemResponse `json:"items"`
 }
 
@@ -164,11 +166,26 @@ func CreateCustomer(c *gin.Context) {
 		return
 	}
 
+	membershipActive := true
+	if input.MembershipActive != nil {
+		membershipActive = *input.MembershipActive
+	}
+	discountPercent := 0
+	if input.SpecialDiscountPercent != nil {
+		discountPercent = *input.SpecialDiscountPercent
+	}
+	if discountPercent < 0 || discountPercent > 100 {
+		utils.RespondError(c, http.StatusBadRequest, "Diskon khusus harus antara 0 sampai 100 persen.")
+		return
+	}
+
 	customer := models.Customer{
-		BusinessID: businessID,
-		Name:       input.Name,
-		Phone:      input.Phone,
-		Email:      input.Email,
+		BusinessID:             businessID,
+		Name:                   input.Name,
+		Phone:                  input.Phone,
+		Email:                  input.Email,
+		MembershipActive:       membershipActive,
+		SpecialDiscountPercent: discountPercent,
 	}
 	if err := config.DB.Create(&customer).Error; err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat profil pelanggan.")
@@ -176,8 +193,8 @@ func CreateCustomer(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Profil pelanggan berhasil dibuat.",
-		"customer":  customer,
+		"message":  "Profil pelanggan berhasil dibuat.",
+		"customer": customer,
 	})
 }
 
@@ -237,9 +254,16 @@ func GetCustomer(c *gin.Context) {
 		})
 	}
 
+	var pointLogs []models.LoyaltyPointLog
+	if err := config.DB.Where("customer_id = ?", customerID).Order("created_at DESC").Limit(50).Find(&pointLogs).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil riwayat poin pelanggan.")
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"customer":           customer,
-		"purchase_history": orderHistory,
+		"purchase_history":   orderHistory,
+		"loyalty_point_logs": pointLogs,
 	})
 }
 
@@ -266,13 +290,25 @@ func UpdateCustomer(c *gin.Context) {
 		return
 	}
 
+	updates := map[string]interface{}{
+		"name":  input.Name,
+		"phone": input.Phone,
+		"email": input.Email,
+	}
+	if input.SpecialDiscountPercent != nil {
+		if *input.SpecialDiscountPercent < 0 || *input.SpecialDiscountPercent > 100 {
+			utils.RespondError(c, http.StatusBadRequest, "Diskon khusus harus antara 0 sampai 100 persen.")
+			return
+		}
+		updates["special_discount_percent"] = *input.SpecialDiscountPercent
+	}
+	if input.MembershipActive != nil {
+		updates["membership_active"] = *input.MembershipActive
+	}
+
 	result := config.DB.Model(&models.Customer{}).
 		Where("id = ? AND business_id = ?", customerID, businessID).
-		Updates(map[string]interface{}{
-			"name":  input.Name,
-			"phone": input.Phone,
-			"email": input.Email,
-		})
+		Updates(updates)
 	if result.Error != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui profil pelanggan.")
 		return
@@ -290,8 +326,8 @@ func UpdateCustomer(c *gin.Context) {
 	customer.Type = customerType(customer.OrderCount)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Profil pelanggan berhasil diperbarui.",
-		"customer":  customer,
+		"message":  "Profil pelanggan berhasil diperbarui.",
+		"customer": customer,
 	})
 }
 

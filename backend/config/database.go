@@ -57,6 +57,8 @@ func ConnectDB() {
 		&models.BranchInventory{},
 		&models.StockMovement{},
 		&models.Customer{},
+		&models.LoyaltyReward{},
+		&models.LoyaltyPointLog{},
 		&models.Order{},
 		&models.OrderItem{},
 	)
