@@ -23,7 +23,7 @@ func ConnectDB() {
 	// 1. First connect to the default "postgres" database to create our target database if it doesn't exist
 	defaultDsn := fmt.Sprintf("host=%s user=%s password=%s dbname=postgres port=%s sslmode=disable TimeZone=Asia/Jakarta",
 		host, user, password, port)
-	
+
 	defaultDb, err := gorm.Open(postgres.Open(defaultDsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres server: %v", err)
@@ -56,6 +56,10 @@ func ConnectDB() {
 		&models.Product{},
 		&models.BranchInventory{},
 		&models.StockMovement{},
+		&models.Customer{},
+		&models.LoyaltyReward{},
+		&models.LoyaltyRewardCustomer{},
+		&models.LoyaltyPointLog{},
 		&models.Order{},
 		&models.OrderItem{},
 	)

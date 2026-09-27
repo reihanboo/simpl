@@ -26,6 +26,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-simpl}
       - DB_PORT=${DB_PORT:-5432}
+      - JWT_SECRET=${JWT_SECRET:-simpl-local-development-secret-change-before-deploy}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - MIDTRANS_SERVER_KEY=${MIDTRANS_SERVER_KEY:-}
     volumes:
       - ./backend:/app
     depends_on:

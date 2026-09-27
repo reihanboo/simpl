@@ -77,7 +77,20 @@ func main() {
 			branch.DELETE("/:id/products/:product_id", controllers.DeleteProduct)
 			branch.POST("/:id/products/:product_id/movement", controllers.AddStockMovement)
 			branch.GET("/:id/movements", controllers.GetStockMovements)
-			
+
+			// Customer Management System
+			branch.GET("/:id/customers", controllers.GetCustomers)
+			branch.POST("/:id/customers", controllers.CreateCustomer)
+			branch.GET("/:id/customers/:customer_id", controllers.GetCustomer)
+			branch.PUT("/:id/customers/:customer_id", controllers.UpdateCustomer)
+			branch.DELETE("/:id/customers/:customer_id", controllers.ArchiveCustomer)
+			branch.POST("/:id/customers/:customer_id/points", controllers.AdjustCustomerPoints)
+			branch.POST("/:id/customers/:customer_id/redeem", controllers.RedeemLoyaltyReward)
+			branch.GET("/:id/loyalty-rewards", controllers.GetLoyaltyRewards)
+			branch.POST("/:id/loyalty-rewards", controllers.CreateLoyaltyReward)
+			branch.PUT("/:id/loyalty-rewards/:reward_id", controllers.UpdateLoyaltyReward)
+			branch.DELETE("/:id/loyalty-rewards/:reward_id", controllers.DeleteLoyaltyReward)
+
 			// Orders
 			branch.POST("/:id/orders", controllers.CreateOrder)
 
