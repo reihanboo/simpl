@@ -19,11 +19,10 @@ import (
 const maxCustomerPageSize = 100
 
 type customerInput struct {
-	Name                   string `json:"name" binding:"required,max=255"`
-	Phone                  string `json:"phone" binding:"omitempty,max=20"`
-	Email                  string `json:"email" binding:"omitempty,email,max=100"`
-	MembershipActive       *bool  `json:"membership_active"`
-	SpecialDiscountPercent *int   `json:"special_discount_percent"`
+	Name             string `json:"name" binding:"required,max=255"`
+	Phone            string `json:"phone" binding:"omitempty,max=20"`
+	Email            string `json:"email" binding:"omitempty,email,max=100"`
+	MembershipActive *bool  `json:"membership_active"`
 }
 
 type customerSummary struct {
@@ -170,22 +169,13 @@ func CreateCustomer(c *gin.Context) {
 	if input.MembershipActive != nil {
 		membershipActive = *input.MembershipActive
 	}
-	discountPercent := 0
-	if input.SpecialDiscountPercent != nil {
-		discountPercent = *input.SpecialDiscountPercent
-	}
-	if discountPercent < 0 || discountPercent > 100 {
-		utils.RespondError(c, http.StatusBadRequest, "Diskon khusus harus antara 0 sampai 100 persen.")
-		return
-	}
 
 	customer := models.Customer{
-		BusinessID:             businessID,
-		Name:                   input.Name,
-		Phone:                  input.Phone,
-		Email:                  input.Email,
-		MembershipActive:       membershipActive,
-		SpecialDiscountPercent: discountPercent,
+		BusinessID:       businessID,
+		Name:             input.Name,
+		Phone:            input.Phone,
+		Email:            input.Email,
+		MembershipActive: membershipActive,
 	}
 	if err := config.DB.Create(&customer).Error; err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat profil pelanggan.")
@@ -295,13 +285,7 @@ func UpdateCustomer(c *gin.Context) {
 		"phone": input.Phone,
 		"email": input.Email,
 	}
-	if input.SpecialDiscountPercent != nil {
-		if *input.SpecialDiscountPercent < 0 || *input.SpecialDiscountPercent > 100 {
-			utils.RespondError(c, http.StatusBadRequest, "Diskon khusus harus antara 0 sampai 100 persen.")
-			return
-		}
-		updates["special_discount_percent"] = *input.SpecialDiscountPercent
-	}
+
 	if input.MembershipActive != nil {
 		updates["membership_active"] = *input.MembershipActive
 	}

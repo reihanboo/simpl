@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
   AlertCircle,
   Award,
-  BadgePercent,
   ChevronRight,
   Coins,
   Eye,
@@ -35,7 +34,6 @@ type Customer = {
   type: 'Returning' | 'New';
   loyaltyPoints: number;
   membershipActive: boolean;
-  specialDiscountPercent: number;
 };
 
 type CustomerStats = {
@@ -75,7 +73,6 @@ type CustomerDetailResponse = {
     type: 'Returning' | 'New';
     loyalty_points: number;
     membership_active: boolean;
-    special_discount_percent: number;
   };
   purchase_history: CustomerPurchase[];
   loyalty_point_logs: Array<{
@@ -98,7 +95,6 @@ type CustomerApiResponse = {
     type: 'Returning' | 'New';
     loyalty_points: number;
     membership_active: boolean;
-    special_discount_percent: number;
   }>;
   total: number;
   stats: CustomerStats;
@@ -183,7 +179,6 @@ export default function CustomersIndex() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [membershipActive, setMembershipActive] = useState(true);
-  const [specialDiscountPercent, setSpecialDiscountPercent] = useState(0);
   const [pointsToAdjust, setPointsToAdjust] = useState('');
   const [pointsError, setPointsError] = useState('');
   const [isAdjustingPoints, setIsAdjustingPoints] = useState(false);
@@ -229,7 +224,6 @@ export default function CustomersIndex() {
           type: customer.type,
           loyaltyPoints: customer.loyalty_points || 0,
           membershipActive: customer.membership_active,
-          specialDiscountPercent: customer.special_discount_percent || 0,
         })));
         setTotalItems(result.total || 0);
         setStats(result.stats || emptyStats);
@@ -272,7 +266,6 @@ export default function CustomersIndex() {
           email: email.trim(),
           phone: phone.trim(),
           membership_active: membershipActive,
-          special_discount_percent: specialDiscountPercent,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -305,7 +298,6 @@ export default function CustomersIndex() {
     setEmail('');
     setPhone('');
     setMembershipActive(true);
-    setSpecialDiscountPercent(0);
     setCreateError('');
     setIsCreateOpen(true);
   };
@@ -316,7 +308,6 @@ export default function CustomersIndex() {
     setEmail(customer.email);
     setPhone(customer.phone);
     setMembershipActive(customer.membershipActive);
-    setSpecialDiscountPercent(customer.specialDiscountPercent);
     setCreateError('');
     setIsCreateOpen(false);
     setActionMenuCustomerId(null);
@@ -380,7 +371,6 @@ export default function CustomersIndex() {
         type: detail.customer.type,
         loyaltyPoints: detail.customer.loyalty_points,
         membershipActive: detail.customer.membership_active,
-        specialDiscountPercent: detail.customer.special_discount_percent,
       });
     } catch (error) {
       setPointsError(error instanceof Error ? error.message : 'Gagal memperbarui poin pelanggan.');
@@ -425,7 +415,7 @@ export default function CustomersIndex() {
             <span className="font-medium text-slate-700">Pelanggan</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Pelanggan</h1>
-          <p className="mt-1 text-sm text-slate-500">Kelola profil, diskon khusus, dan loyalitas pelanggan.</p>
+          <p className="mt-1 text-sm text-slate-500">Kelola profil pelanggan, keanggotaan, dan program loyalitas.</p>
         </div>
         {activeSection === 'customers' && (
           <button
@@ -581,9 +571,7 @@ export default function CustomersIndex() {
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${customer.membershipActive ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
                           <Award className="h-3.5 w-3.5" /> {customer.membershipActive ? `${customer.loyaltyPoints.toLocaleString('id-ID')} poin` : 'Non-member'}
                         </span>
-                        {customer.specialDiscountPercent > 0 && (
-                          <p className="flex items-center gap-1 text-xs font-semibold text-violet-700"><BadgePercent className="h-3.5 w-3.5" /> Diskon {customer.specialDiscountPercent}%</p>
-                        )}
+
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -725,10 +713,7 @@ export default function CustomersIndex() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Poin tersedia</p>
                       <p className="mt-1 text-sm font-medium text-slate-900">{detail.customer.loyalty_points.toLocaleString('id-ID')} poin</p>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Diskon khusus</p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">{detail.customer.special_discount_percent}%</p>
-                    </div>
+
                   </section>
 
                   {detail.customer.membership_active && (
@@ -802,7 +787,7 @@ export default function CustomersIndex() {
                   onClick={() => {
                     const customer = detail.customer;
                     setIsDetailOpen(false);
-                    openEditModal({ id: customer.id, name: customer.name, email: customer.email || '', phone: customer.phone || '', orders: customer.orders, lifetimeValue: customer.lifetime_value_idr, lastVisit: customer.last_visit, type: customer.type, loyaltyPoints: customer.loyalty_points, membershipActive: customer.membership_active, specialDiscountPercent: customer.special_discount_percent });
+                    openEditModal({ id: customer.id, name: customer.name, email: customer.email || '', phone: customer.phone || '', orders: customer.orders, lifetimeValue: customer.lifetime_value_idr, lastVisit: customer.last_visit, type: customer.type, loyaltyPoints: customer.loyalty_points, membershipActive: customer.membership_active });
                   }}
                   className="inline-flex items-center gap-2 rounded-xl bg-[#21AC3A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d9732]"
                 >
@@ -915,20 +900,7 @@ export default function CustomersIndex() {
                   <input type="checkbox" checked={membershipActive} onChange={(event) => setMembershipActive(event.target.checked)} className="mt-1 h-4 w-4 accent-[#21AC3A]" />
                   <span><span className="block text-sm font-semibold text-slate-800">Anggota program loyalitas</span><span className="mt-1 block text-xs text-slate-500">Pelanggan dapat mengumpulkan poin dan menukarkannya dengan hadiah.</span></span>
                 </label>
-                <div className="space-y-2">
-                  <label htmlFor="customer-discount" className="text-sm font-semibold text-slate-700">Diskon khusus (%)</label>
-                  <input
-                    id="customer-discount"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={specialDiscountPercent}
-                    onChange={(event) => setSpecialDiscountPercent(Math.min(100, Math.max(0, Number(event.target.value))))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
-                  />
-                  <p className="text-xs text-slate-500">Diskon VIP khusus pelanggan ini. 0% berarti tidak ada diskon khusus.</p>
-                </div>
+
 
               </form>
             </div>
