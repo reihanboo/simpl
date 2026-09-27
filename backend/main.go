@@ -84,6 +84,9 @@ func main() {
 			// Reports
 			branch.GET("/:id/reports/sales", controllers.GetSalesReport)
 			branch.GET("/:id/reports/inventory", controllers.GetInventoryReport)
+
+			// Forecasting
+			branch.GET("/:id/forecast", controllers.GetStockForecast)
 		}
 	}
 
