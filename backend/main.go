@@ -90,6 +90,20 @@ func main() {
 			branch.POST("/:id/loyalty-rewards", controllers.CreateLoyaltyReward)
 			branch.PUT("/:id/loyalty-rewards/:reward_id", controllers.UpdateLoyaltyReward)
 			branch.DELETE("/:id/loyalty-rewards/:reward_id", controllers.DeleteLoyaltyReward)
+
+			// Orders
+			branch.POST("/:id/orders", controllers.CreateOrder)
+
+			// Reports
+			branch.GET("/:id/reports/sales", controllers.GetSalesReport)
+			branch.GET("/:id/reports/inventory", controllers.GetInventoryReport)
+
+			// Dashboard
+			branch.GET("/:id/dashboard", controllers.GetBranchDashboard)
+
+			// Forecasting
+			branch.GET("/:id/forecast", controllers.GetStockForecast)
+			branch.GET("/:id/forecast/series", controllers.GetProductForecastSeries)
 		}
 	}
 

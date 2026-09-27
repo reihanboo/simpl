@@ -16,6 +16,8 @@ import VerifyOtpPage from './pages/auth/verify-otp';
 import BranchDashboard from './pages/dashboard/branch/index';
 import BranchLayout from './pages/dashboard/branch/layout';
 import BranchInventory from './pages/dashboard/branch/inventory/index';
+import BranchPOS from './pages/dashboard/branch/pos/index';
+import BranchReports from './pages/dashboard/branch/reports/index';
 import CustomersIndex from './pages/dashboard/branch/customers/index';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -248,7 +250,7 @@ function LandingPage() {
 
               <div className="mb-8">
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Paket UMKM</h3>
-                <p className="text-slate-500 mb-6 min-h-[48px]">Semua yang UMKM butuhkan untuk jualan lebih rapi dan stok selalu terkontrol. Cukup satu aplikasi.</p>
+                <p className="text-slate-500 mb-6 min-h-12">Semua yang UMKM butuhkan untuk jualan lebih rapi dan stok selalu terkontrol. Cukup satu aplikasi.</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-5xl font-extrabold tracking-tight text-slate-900">Rp 29rb</span>
                   <span className="text-slate-500 font-medium">/ bulan</span>
@@ -279,7 +281,7 @@ function LandingPage() {
             >
               <div className="mb-8">
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Paket Enterprise</h3>
-                <p className="text-slate-500 mb-6 min-h-[48px]">Untuk bisnis yang siap naik level. Kelola pelanggan, bangun loyalitas, dan atur tim dalam satu tempat.</p>
+                <p className="text-slate-500 mb-6 min-h-12">Untuk bisnis yang siap naik level. Kelola pelanggan, bangun loyalitas, dan atur tim dalam satu tempat.</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-5xl font-extrabold tracking-tight text-slate-900">Rp 149rb</span>
                   <span className="text-slate-500 font-medium">/ bulan</span>
@@ -568,6 +570,8 @@ export default function App() {
           <Route path="branch/:id" element={<BranchLayout />}>
             <Route index element={<BranchDashboard />} />
             <Route path="inventory" element={<BranchInventory />} />
+            <Route path="pos" element={<BranchPOS />} />
+            <Route path="reports" element={<BranchReports />} />
             <Route path="customers" element={<CustomersIndex />} />
           </Route>
         </Route>

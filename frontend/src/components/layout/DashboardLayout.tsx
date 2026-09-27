@@ -122,6 +122,8 @@ export default function DashboardLayout() {
           name: pathSegment.charAt(0).toUpperCase() + pathSegment.slice(1).replace('-', ' '),
           path: currentPath
         });
+      } else if (breadcrumbs.length > 0) {
+        breadcrumbs[breadcrumbs.length - 1].path = currentPath;
       }
     });
 
@@ -149,7 +151,7 @@ export default function DashboardLayout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 z-10">
+        <header className="relative h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 z-50">
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex items-center text-sm">
               {getBreadcrumbs()}
