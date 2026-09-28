@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Package, ShieldCheck } from 'lucide-react';
+import { getAuthenticatedDestination } from '../../utils/auth-routing';
 
 export default function VerifyOtpPage() {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ export default function VerifyOtpPage() {
       }
 
       localStorage.setItem('token', data.token);
-      navigate('/dashboard');
+      navigate(await getAuthenticatedDestination(data.token), { replace: true });
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {

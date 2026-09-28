@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import { getAuthenticatedDestination } from '../../utils/auth-routing';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ export default function LoginPage() {
         localStorage.removeItem('remembered_identity');
       }
 
-      navigate('/dashboard');
+      navigate(await getAuthenticatedDestination(data.token), { replace: true });
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {

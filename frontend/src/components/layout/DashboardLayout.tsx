@@ -65,7 +65,7 @@ export default function DashboardLayout() {
         });
         if (resBusinesses.ok) {
           const dataBiz = await resBusinesses.json();
-          if (dataBiz.businesses && dataBiz.businesses.length > 0) {
+          if (Array.isArray(dataBiz.businesses) && dataBiz.businesses.length > 0) {
             const orgs = dataBiz.businesses.map((b: any) => ({
               id: b.id,
               name: b.name,
@@ -79,6 +79,8 @@ export default function DashboardLayout() {
             // Check if there is any pending payment
             const pendings = orgs.filter((o: any) => o.status === 'pending' && o.snapToken);
             setPendingPaymentOrgs(pendings);
+          } else {
+            navigate('/onboarding', { replace: true });
           }
         }
       } catch (error) {
@@ -86,7 +88,7 @@ export default function DashboardLayout() {
       }
     };
     fetchUser();
-  }, []);
+  }, [navigate]);
 
   const handlePayNow = (snapToken: string) => {
     if (window.snap) {
