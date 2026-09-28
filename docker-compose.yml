@@ -26,6 +26,12 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-simpl}
       - DB_PORT=${DB_PORT:-5432}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_API=${DEEPSEEK_API:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - AI_DB_USER=${AI_DB_USER:-}
+      - AI_DB_PASSWORD=${AI_DB_PASSWORD:-}
     depends_on:
       - db
     restart: unless-stopped
