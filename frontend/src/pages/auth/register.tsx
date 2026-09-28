@@ -76,22 +76,23 @@ export default function RegisterPage() {
     <div className="flex min-h-screen flex-col bg-[#F5F5F5] font-sans text-[#242424]">
       <header className="flex h-14 shrink-0 items-center justify-between bg-[#252525] px-6 text-white">
         <Link to="/" className="flex items-center gap-2.5" aria-label="Simpl beranda">
-          <img src="/simpl-logo-dark.png" alt="Simpl" className="h-7 w-auto object-contain" />
-          <span className="rounded-full bg-[#EAF7EC] px-2 py-0.5 text-[11px] font-semibold text-[#21AC3A]">
-            Business management
-          </span>
+          <img src="/simpl-logo-light.png" alt="Simpl" className="h-7 w-auto object-contain" />
         </Link>
         <nav className="flex items-center gap-4 text-xs text-[#D1D1D1] sm:gap-6 sm:text-[13px]">
           <Link to="/auth/login" className="transition-colors hover:text-white">
             Masuk
           </Link>
-          <span className="hidden sm:inline">Pusat bantuan</span>
           <span className="text-white">Indonesia · ID</span>
         </nav>
       </header>
 
       <main className="flex flex-1 items-stretch">
-        <aside className="hidden w-[36.1%] shrink-0 flex-col justify-between border-r border-[#D1D1D1] bg-[#F0F0F0] p-10 lg:flex xl:p-14">
+        <motion.aside
+          initial={{ opacity: 0, x: -18 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+          className="hidden w-[36.1%] shrink-0 flex-col justify-between border-r border-[#D1D1D1] bg-[#F0F0F0] p-10 lg:flex xl:p-14"
+        >
           <div className="flex flex-col gap-4.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#21AC3A]">
               Mulai kelola bisnis lebih sederhana
@@ -144,10 +145,20 @@ export default function RegisterPage() {
             <ShieldCheck className="h-3.75 w-3.75 text-[#21AC3A]" />
             <span>Data terenkripsi · Dicadangkan setiap hari</span>
           </div>
-        </aside>
+        </motion.aside>
 
-        <section className="flex flex-1 items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
-          <div className="w-full max-w-120 border border-[#D1D1D1] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.13)] sm:p-8">
+        <motion.section
+          initial={{ opacity: 0, x: 18 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, ease: 'easeOut' }}
+          className="flex flex-1 items-center justify-center px-4 py-8 sm:px-8 lg:px-12"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 14, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.35, delay: 0.1, ease: 'easeOut' }}
+            className="w-full max-w-120 border border-[#D1D1D1] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.13)] sm:p-8"
+          >
             <div className="mb-5.5">
               <h2 className="text-2xl font-semibold text-[#242424]">Buat akun Simpl</h2>
               <p className="mt-1.5 text-[13px] text-[#616161]">
@@ -178,7 +189,13 @@ export default function RegisterPage() {
               </motion.div>
             )}
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+            <motion.form
+              onSubmit={handleSubmit}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2, ease: 'easeOut' }}
+              className="flex flex-col gap-3.5"
+            >
               <div className="flex flex-col gap-1.25">
                 <label htmlFor="name" className="text-[13px] font-semibold text-[#242424]">
                   Nama pengguna
@@ -256,14 +273,17 @@ export default function RegisterPage() {
                 <p className="text-[11px] leading-[1.35] text-[#8A8886]">Minimal 6 karakter.</p>
               </div>
 
-              <button
+              <motion.button
                 type="submit"
                 disabled={isLoading}
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.99 }}
+                transition={{ duration: 0.15 }}
                 className="mt-1 flex h-9 w-full items-center justify-center border border-[#21AC3A] bg-[#21AC3A] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isLoading ? 'Memproses...' : 'Buat akun'}
-              </button>
-            </form>
+              </motion.button>
+            </motion.form>
 
             <div className="mt-5 flex justify-center gap-1.5 text-[13px]">
               <span className="text-[#616161]">Sudah punya akun?</span>
@@ -271,8 +291,8 @@ export default function RegisterPage() {
                 Masuk
               </Link>
             </div>
-          </div>
-        </section>
+          </motion.div>
+        </motion.section>
       </main>
     </div>
   );
