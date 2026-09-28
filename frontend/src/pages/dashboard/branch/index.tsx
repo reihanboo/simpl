@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Markdown } from '../../../components/Markdown';
 import {
   TrendingUp,
   Package,
@@ -155,6 +156,7 @@ export default function BranchDashboard() {
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [isChatSending, setIsChatSending] = useState(false);
   const productDropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchDashboard = async () => {
@@ -290,33 +292,42 @@ export default function BranchDashboard() {
 
   const recentTransactions = data?.recent_orders ?? [];
 
-  const getMockChatReply = (question: string) => {
-    const prompt = question.toLowerCase();
-    if (prompt.includes('stok') || prompt.includes('pesan ulang')) {
-      const suggestedProduct = forecastItems[0];
-      const productSuggestion = suggestedProduct
-        ? ` Prioritas proyeksi saat ini: ${suggestedProduct.name}, disarankan pesan ${suggestedProduct.recommended_reorder_qty} unit.`
-        : '';
-      return `Ada ${metrics?.low_stock_count ?? 0} produk dengan stok menipis dan ${metrics?.out_of_stock_count ?? 0} produk yang habis.${productSuggestion} Periksa menu stok untuk detail lengkap.`;
-    }
-    if (prompt.includes('penjualan') || prompt.includes('transaksi')) {
-      return `Hari ini tercatat ${formatCompactIDR(metrics?.revenue_today ?? 0)} dari ${metrics?.orders_today ?? 0} transaksi. Total pelanggan terdaftar: ${metrics?.customers_total ?? 0}.`;
-    }
-    if (prompt.includes('laris') || prompt.includes('produk')) {
-      return `Ringkasan saat ini mencatat ${metrics?.items_sold_today ?? 0} item terjual hari ini. Peringkat produk terlaris belum tersedia di ringkasan dashboard ini.`;
-    }
-    return `Saya bisa membantu membaca ringkasan cabang. Hari ini ada ${metrics?.orders_today ?? 0} transaksi, penjualan ${formatCompactIDR(metrics?.revenue_today ?? 0)}, dan ${metrics?.low_stock_count ?? 0} produk dengan stok menipis.`;
-  };
-
-  const sendChatMessage = (message = chatInput.trim()) => {
+  const sendChatMessage = async (message = chatInput.trim()) => {
     const content = message.trim();
-    if (!content) return;
-    setChatMessages((messages) => [
-      ...messages,
-      { role: 'user', content },
-      { role: 'assistant', content: getMockChatReply(content) },
-    ]);
+    if (!content || isChatSending) return;
+
+    const history = chatMessages.slice(-10);
+    setChatMessages((messages) => [...messages, { role: 'user', content }]);
     setChatInput('');
+    setIsChatSending(true);
+
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const res = await fetch(`/api/branches/${id}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: content, history }),
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error || 'ABAI tidak dapat menjawab saat ini.');
+      }
+
+      const result = await res.json();
+      setChatMessages((messages) => [...messages, { role: 'assistant', content: result.reply }]);
+    } catch (err) {
+      const fallback = 'Maaf, ABAI sedang tidak dapat dihubungi. Coba lagi sebentar.';
+      setChatMessages((messages) => [
+        ...messages,
+        { role: 'assistant', content: err instanceof Error ? err.message : fallback },
+      ]);
+    } finally {
+      setIsChatSending(false);
+    }
   };
 
   if (isLoading && !data) {
@@ -451,7 +462,7 @@ export default function BranchDashboard() {
               <h2 className="text-lg font-semibold">ABAI assistant</h2>
               <p className="mt-0.5 text-xs text-slate-500">Asisten operasional AI</p>
             </div>
-            <span className="border border-[#21AC3A]/30 bg-[#21AC3A]/10 px-2.5 py-1 text-xs font-medium text-[#16852A]">Pratinjau</span>
+            <span className="border border-[#21AC3A]/30 bg-[#21AC3A]/10 px-2.5 py-1 text-xs font-medium text-[#16852A]">Aktif</span>
           </div>
           <div className="flex min-h-0 flex-1 flex-col p-4">
             <div className="max-h-72 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
@@ -468,10 +479,21 @@ export default function BranchDashboard() {
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white"><Sparkles className="h-4 w-4" /></span>
                   )}
                   <div className={`max-w-[85%] p-3 text-xs leading-5 ${message.role === 'user' ? 'bg-[#21AC3A] text-white' : 'min-w-0 flex-1 bg-slate-100 text-slate-700'}`}>
-                    {message.content}
+                    {message.role === 'user' ? message.content : <Markdown content={message.content} />}
                   </div>
                 </div>
               ))}
+              {isChatSending && (
+                <div className="flex gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white"><Sparkles className="h-4 w-4" /></span>
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 bg-slate-100 p-3 text-xs text-slate-500">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+                    <span className="ml-1">ABAI sedang menyiapkan jawaban...</span>
+                  </div>
+                </div>
+              )}
             </div>
             {chatMessages.length === 0 && (
               <div className="mt-4">
@@ -508,18 +530,18 @@ export default function BranchDashboard() {
               <button
                 type="submit"
                 aria-label="Kirim pesan"
-                disabled={!chatInput.trim()}
+                disabled={!chatInput.trim() || isChatSending}
                 className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
               >
                 <Send className="h-3.5 w-3.5" />
               </button>
             </form>
-            <p className="mt-2 text-center text-[11px] leading-5 text-slate-400">Simulasi lokal · Tidak terhubung ke layanan AI</p>
+            <p className="mt-2 text-center text-[11px] leading-5 text-slate-400">Ditenagai DeepSeek · Data cabang diakses lewat MCP (baca-saja)</p>
           </div>
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-slate-600">
               <Info className="h-3.5 w-3.5 text-slate-500" />
-              Mockup lokal · Tidak terhubung ke layanan AI
+              Terhubung ke DeepSeek melalui MCP · Akses baca-saja ke data cabang
             </div>
           </div>
         </aside>
