@@ -32,6 +32,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isDashboardHome = location.pathname === '/dashboard';
+  const isBranchRoute = location.pathname.startsWith('/dashboard/branch/');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -400,7 +401,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-y-auto ${isDashboardHome ? 'bg-[#F5F5F5]' : 'bg-slate-50/50 p-4 sm:p-6 lg:p-8'}`}>
+        <main className={`flex-1 overflow-y-auto ${isDashboardHome ? 'bg-[#F5F5F5]' : isBranchRoute ? 'bg-slate-50/50' : 'bg-slate-50/50 p-4 sm:p-6 lg:p-8'}`}>
           <Outlet context={{ activeOrg }} />
         </main>
         {isDashboardHome && (

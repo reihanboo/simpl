@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,10 +11,32 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 export default function Sidebar({ branchId }: { branchId: string }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [branchName, setBranchName] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchBranchName = async () => {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches/${branchId}/dashboard?days=1`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data: { branch?: { name?: string } } = await response.json();
+        if (data.branch?.name) setBranchName(data.branch.name);
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Failed to fetch branch name', error);
+      }
+    };
+
+    fetchBranchName();
+    return () => controller.abort();
+  }, [branchId]);
   const navItems = [
     { name: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, path: `/dashboard/branch/${branchId}` },
     { name: 'Point of Sales (POS)', icon: <ShoppingCart className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/pos` },
@@ -28,24 +50,31 @@ export default function Sidebar({ branchId }: { branchId: string }) {
   return (
     <motion.aside
       initial={false}
-      animate={{ width: isCollapsed ? 72 : 232 }}
-      className="relative z-20 hidden h-full min-h-screen shrink-0 flex-col border-r border-slate-200 bg-white md:flex"
+      animate={{ width: isCollapsed ? 56 : 232 }}
+      className="sticky top-0 z-20 hidden h-[calc(100vh-4rem)] min-h-0 shrink-0 self-start flex-col border-r border-slate-200 bg-white md:flex"
     >
-
-      <div className={`border-b border-slate-200 py-4 ${isCollapsed ? 'px-2' : 'px-4'}`}>
-        {!isCollapsed ? (
-          <>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-900">Operasional cabang</p>
-            <p className="mt-0.5 text-xs text-slate-500">Penjualan dan inventori</p>
-          </>
-        ) : (
-          <div className="flex justify-center" title="Operasional cabang">
-            <LayoutDashboard className="h-5 w-5 text-slate-500" />
+      <div className={`flex min-h-16 shrink-0 items-center border-b border-slate-200 ${isCollapsed ? 'justify-center px-1' : 'px-4 py-3'}`}>
+        {!isCollapsed && (
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Cabang aktif</p>
+            <p className="mt-1 truncate text-sm font-semibold text-slate-900" title={branchName || undefined}>
+              {branchName || 'Memuat nama cabang…'}
+            </p>
           </div>
         )}
       </div>
 
-      <nav aria-label="Navigasi cabang" className={`flex-1 overflow-y-auto py-4 ${isCollapsed ? 'px-2' : 'px-3'}`}>
+      <button
+        type="button"
+        onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+        aria-label={isCollapsed ? 'Perluas navigasi' : 'Ciutkan navigasi'}
+        title={isCollapsed ? 'Perluas navigasi' : 'Ciutkan navigasi'}
+        className="absolute right-0 top-12 z-30 flex h-6 w-6 translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 shadow-sm transition-colors hover:border-[#21AC3A] hover:text-[#21AC3A]"
+      >
+        {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+      </button>
+
+      <nav aria-label="Navigasi cabang" className={`flex-1 overflow-y-auto py-4 ${isCollapsed ? 'px-1' : 'px-3'}`}>
         {!isCollapsed && (
           <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-wider text-slate-400">Menu</p>
         )}
@@ -56,29 +85,19 @@ export default function Sidebar({ branchId }: { branchId: string }) {
               to={item.path}
               end={item.path === `/dashboard/branch/${branchId}`}
               title={isCollapsed ? item.name : undefined}
+              aria-label={isCollapsed ? item.name : undefined}
               className={({ isActive }) =>
-                `relative flex items-center gap-3 overflow-hidden border-l-2 py-2.5 text-sm transition-colors ${
+                `relative flex items-center overflow-hidden border-l-2 py-2.5 text-sm transition-colors ${
                   isActive
                     ? 'border-[#21AC3A] bg-green-50 font-semibold text-[#16852B]'
                     : 'border-transparent font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                } ${isCollapsed ? 'justify-center px-0' : 'px-3'}`
+                } ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-3'}`
               }
             >
               {({ isActive }) => (
                 <>
                   <span className={isActive ? 'text-[#21AC3A]' : 'text-slate-400'}>{item.icon}</span>
-                  <AnimatePresence initial={false}>
-                    {!isCollapsed && (
-                      <motion.span
-                        initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: 'auto' }}
-                        exit={{ opacity: 0, width: 0 }}
-                        className="truncate whitespace-nowrap"
-                      >
-                        {item.name}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {!isCollapsed && <span className="truncate whitespace-nowrap">{item.name}</span>}
                 </>
               )}
             </NavLink>
@@ -86,14 +105,6 @@ export default function Sidebar({ branchId }: { branchId: string }) {
         </div>
       </nav>
 
-      <button
-        type="button"
-        onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-        aria-label={isCollapsed ? 'Perluas navigasi' : 'Ciutkan navigasi'}
-        className="flex h-11 shrink-0 items-center justify-center gap-2 border-t border-slate-200 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
-      >
-        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" />Ciutkan menu</>}
-      </button>
     </motion.aside>
   );
 }

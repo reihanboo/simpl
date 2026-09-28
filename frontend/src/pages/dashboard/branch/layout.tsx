@@ -7,10 +7,10 @@ export default function BranchLayout() {
   const isPos = location.pathname.endsWith('/pos');
 
   return (
-    <div className="flex h-full -mx-4 sm:-mx-6 lg:-mx-8 -my-4 sm:-my-6 lg:-my-8">
+    <div className="flex min-h-full">
       {id && <Sidebar branchId={id} />}
       
-      <div className="flex-1 overflow-y-auto bg-slate-50/50 relative flex flex-col h-full">
+      <div className={`min-w-0 flex-1 bg-slate-50/50 relative flex flex-col ${isPos ? 'h-full overflow-y-auto' : ''}`}>
         {isPos ? (
           <Outlet />
         ) : (
