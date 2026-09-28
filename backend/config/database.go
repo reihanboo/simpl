@@ -67,6 +67,32 @@ func ConnectDB() {
 		log.Fatalf("Failed to auto migrate: %v", err)
 	}
 
+	// Older installations may still have the pre-rename amount column.
+	var hasLegacyOrderAmountColumn bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'orders'
+			  AND column_name = 'total_amount_id_r'
+		)
+	`).Scan(&hasLegacyOrderAmountColumn).Error; err != nil {
+		log.Fatalf("Failed to inspect legacy order total column: %v", err)
+	}
+	if hasLegacyOrderAmountColumn {
+		if err := db.Exec(`
+			UPDATE orders
+			SET total_amount_idr = total_amount_id_r
+			WHERE total_amount_id_r IS NOT NULL
+			  AND (total_amount_idr IS NULL OR total_amount_idr = 0)
+		`).Error; err != nil {
+			log.Fatalf("Failed to migrate legacy order totals: %v", err)
+		}
+		if err := db.Exec("ALTER TABLE orders ALTER COLUMN total_amount_id_r DROP NOT NULL").Error; err != nil {
+			log.Fatalf("Failed to update legacy order total constraint: %v", err)
+		}
+	}
+
 	DB = db
 	log.Println("Database connected & models migrated.")
 }

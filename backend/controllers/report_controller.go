@@ -57,20 +57,30 @@ func GetSalesReport(c *gin.Context) {
 		return
 	}
 
-	// Calculate summary stats
+	// Calculate summary stats and include item quantities for the POS transaction log.
+	type salesOrderResponse struct {
+		models.Order
+		ItemsCount int `json:"items_count"`
+	}
 	var totalRevenue int64
 	var totalDiscount int64
 	var totalOrders int = len(orders)
 	var totalItemsSold int
+	ordersResponse := make([]salesOrderResponse, 0, len(orders))
 
 	for _, order := range orders {
+		itemsCount := 0
+		for _, item := range order.Items {
+			itemsCount += item.Qty
+		}
 		totalRevenue += order.TotalAmountIDR
 		totalDiscount += order.DiscountAmountIDR
-		totalItemsSold += len(order.Items)
+		totalItemsSold += itemsCount
+		ordersResponse = append(ordersResponse, salesOrderResponse{Order: order, ItemsCount: itemsCount})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"orders": orders,
+		"orders": ordersResponse,
 		"summary": gin.H{
 			"total_orders":     totalOrders,
 			"total_revenue":    totalRevenue,
@@ -162,11 +172,11 @@ func GetInventoryReport(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"items": items,
 		"summary": gin.H{
-			"total_products":           totalProducts,
-			"total_stock_value_cost":   totalStockValueCost,
+			"total_products":            totalProducts,
+			"total_stock_value_cost":    totalStockValueCost,
 			"total_stock_value_selling": totalStockValueSelling,
-			"low_stock_count":          lowStockCount,
-			"out_of_stock_count":       outOfStockCount,
+			"low_stock_count":           lowStockCount,
+			"out_of_stock_count":        outOfStockCount,
 		},
 	})
 }

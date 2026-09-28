@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Store, Crown, Check, ArrowLeft, MapPin, Locate } from 'lucide-react';
+import { Store, Crown, Check, ArrowLeft, MapPin, Locate, Building2, CreditCard, Info, ShieldCheck } from 'lucide-react';
 import { Map, Marker } from 'pigeon-maps';
 
 declare global {
@@ -125,202 +125,283 @@ export default function NewBusinessPage() {
     }
   };
 
+  const monthlyPrice = newBusinessPlan === 'UMKM' ? 29000 : 149000;
+  const totalPrice = monthlyPrice * durationMonths;
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="mb-8">
+    <div className="mx-auto w-full max-w-[1440px] text-slate-900">
+      <div className="mb-6 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 lg:px-8">
         <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-4 cursor-pointer"
+          onClick={() => navigate('/dashboard')}
+          className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-[#21AC3A] transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kembali</span>
+          <ArrowLeft className="h-4 w-4" />
+          <span>Kembali ke dashboard</span>
         </button>
-        <h1 className="text-3xl font-bold text-slate-900">Buat Bisnis Baru</h1>
-        <p className="text-slate-500 mt-2">Tambahkan bisnis baru ke dalam akun Anda untuk mulai mengelola cabang dan produk.</p>
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center bg-[#21AC3A]/10 text-[#21AC3A]">
+            <Building2 className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Manajemen bisnis / Pengaturan</p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Buat bisnis baru</h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">Atur identitas, lokasi cabang utama, dan paket langganan untuk bisnis Anda.</p>
+          </div>
+        </div>
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+        className="grid items-start gap-5 px-4 pb-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:px-8 xl:gap-6"
       >
-        <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-8">
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Nama Bisnis</label>
-            <p className="text-sm text-slate-500 mb-3">Masukkan nama resmi atau nama toko bisnis Anda.</p>
-            <input
-              type="text"
-              required
-              value={newBusinessName}
-              onChange={(e) => setNewBusinessName(e.target.value)}
-              placeholder="Contoh: Supermarket Jaya"
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/50 focus:border-[#21AC3A] transition-all text-slate-900"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Lokasi Cabang Utama</label>
-            <p className="text-sm text-slate-500 mb-3">Masukkan alamat cabang atau gunakan GPS untuk melacak posisi Anda saat ini.</p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <MapPin className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Contoh: Jl. Sudirman No. 1, Jakarta"
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/50 focus:border-[#21AC3A] transition-all text-slate-900"
-                />
+        <form onSubmit={handleSubmit} className="min-w-0 space-y-5">
+          <div className="grid gap-5 xl:grid-cols-[200px_minmax(0,1fr)]">
+            <nav aria-label="Langkah pembuatan bisnis" className="h-fit border border-slate-200 bg-white p-4 xl:sticky xl:top-4">
+              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Konfigurasi</p>
+              <ol className="space-y-1">
+                {[
+                  { number: '01', label: 'Informasi bisnis', href: '#informasi-bisnis', active: true },
+                  { number: '02', label: 'Lokasi utama', href: '#lokasi-utama', active: Boolean(address) },
+                  { number: '03', label: 'Paket langganan', href: '#paket-langganan', active: true },
+                  { number: '04', label: 'Durasi & pembayaran', href: '#durasi-langganan', active: true },
+                ].map((step) => (
+                  <li key={step.number}>
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById(step.href.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      className="flex w-full items-center gap-3 px-2 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 hover:text-[#21AC3A] cursor-pointer"
+                    >
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center border text-[11px] font-semibold ${step.active ? 'border-[#21AC3A] bg-[#21AC3A] text-white' : 'border-slate-300 bg-white text-slate-500'}`}>
+                        {step.number}
+                      </span>
+                      <span>{step.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-4 border-t border-slate-200 pt-4 text-xs leading-5 text-slate-500">
+                Informasi ini dapat diperbarui nanti melalui pengaturan bisnis.
               </div>
-              <button
-                type="button"
-                onClick={handleGetLocation}
-                disabled={isLoadingLocation}
-                className="px-4 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-[#21AC3A] hover:border-[#21AC3A] rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isLoadingLocation ? (
-                  <div className="w-5 h-5 border-2 border-slate-300 border-t-[#21AC3A] rounded-full animate-spin"></div>
-                ) : (
-                  <Locate className="w-5 h-5" />
-                )}
-                <span>Lacak Lokasi</span>
-              </button>
-            </div>
-            
-            <div className="mt-4 h-64 w-full rounded-xl overflow-hidden border border-slate-200 relative z-0">
-              <Map 
-                height={256} 
-                center={mapCenter} 
-                defaultZoom={13} 
-                onClick={handleMapClick}
-              >
-                {mapPosition && <Marker width={40} anchor={mapPosition} />}
-              </Map>
-            </div>
-          </div>
+            </nav>
 
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Pilih Paket</label>
-            <p className="text-sm text-slate-500 mb-4">Pilih paket langganan yang sesuai dengan kebutuhan skala bisnis Anda.</p>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div
-                onClick={() => setNewBusinessPlan('UMKM')}
-                className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all ${newBusinessPlan === 'UMKM' ? 'border-[#21AC3A] bg-[#21AC3A]/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
-              >
-                {newBusinessPlan === 'UMKM' && (
-                  <div className="absolute top-4 right-4 text-[#21AC3A]">
-                    <Check className="w-5 h-5" />
+            <div className="min-w-0 space-y-5">
+              <section id="informasi-bisnis" className="scroll-mt-4 border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center bg-[#21AC3A]/10 text-xs font-bold text-[#21AC3A]">01</span>
+                    <div>
+                      <h2 className="font-semibold">Informasi bisnis</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">Masukkan nama resmi atau nama toko bisnis Anda.</p>
+                    </div>
                   </div>
-                )}
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
-                  <Store className="w-6 h-6" />
                 </div>
-                <div className="font-bold text-lg text-slate-900 mb-1">UMKM</div>
-                <div className="text-sm text-slate-500 font-medium mb-4">Mulai dari Rp 29.000/bln</div>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>Point of Sales (POS)</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>Manajemen Stok Dasar</span>
-                  </li>
-                </ul>
-              </div>
+                <div className="p-5 sm:p-6">
+                  <label htmlFor="business-name" className="mb-2 block text-sm font-medium text-slate-800">Nama bisnis <span className="text-red-600">*</span></label>
+                  <input
+                    id="business-name"
+                    type="text"
+                    required
+                    value={newBusinessName}
+                    onChange={(e) => setNewBusinessName(e.target.value)}
+                    placeholder="Contoh: Supermarket Jaya"
+                    className="w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
+                  />
+                  <p className="mt-2 text-xs text-slate-500">Nama ini akan ditampilkan di dashboard dan laporan bisnis.</p>
+                </div>
+              </section>
 
-              <div
-                onClick={() => setNewBusinessPlan('Enterprise')}
-                className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all ${newBusinessPlan === 'Enterprise' ? 'border-[#21AC3A] bg-[#21AC3A]/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
-              >
-                {newBusinessPlan === 'Enterprise' && (
-                  <div className="absolute top-4 right-4 text-[#21AC3A]">
-                    <Check className="w-5 h-5" />
+              <section id="lokasi-utama" className="scroll-mt-4 border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center bg-[#21AC3A]/10 text-xs font-bold text-[#21AC3A]">02</span>
+                    <div>
+                      <h2 className="font-semibold">Lokasi cabang utama</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">Tentukan alamat awal bisnis. Anda dapat menambah cabang lain nanti.</p>
+                    </div>
                   </div>
-                )}
-                <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mb-4">
-                  <Crown className="w-6 h-6" />
                 </div>
-                <div className="font-bold text-lg text-slate-900 mb-1">Enterprise</div>
-                <div className="text-sm text-slate-500 font-medium mb-4">Mulai dari Rp 149.000/bln</div>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Check className="w-4 h-4 text-blue-500 shrink-0" />
-                    <span>Semua fitur UMKM</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Check className="w-4 h-4 text-blue-500 shrink-0" />
-                    <span>Customer Management (CRM)</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-slate-600">
-                    <Check className="w-4 h-4 text-blue-500 shrink-0" />
-                    <span>Employee Management (HR)</span>
-                  </li>
-                </ul>
+                <div className="p-5 sm:p-6">
+                  <label htmlFor="business-address" className="mb-2 block text-sm font-medium text-slate-800">Alamat <span className="text-red-600">*</span></label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        id="business-address"
+                        type="text"
+                        required
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Contoh: Jl. Sudirman No. 1, Jakarta"
+                        className="w-full border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleGetLocation}
+                      disabled={isLoadingLocation}
+                      className="inline-flex items-center justify-center gap-2 border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:border-[#21AC3A] hover:text-[#21AC3A] disabled:opacity-50 cursor-pointer"
+                    >
+                      {isLoadingLocation ? (
+                        <span className="h-4 w-4 animate-spin border-2 border-slate-300 border-t-[#21AC3A]" />
+                      ) : (
+                        <Locate className="h-4 w-4" />
+                      )}
+                      <span>Gunakan lokasi saya</span>
+                    </button>
+                  </div>
+                  <div className="relative z-0 mt-4 h-56 w-full overflow-hidden border border-slate-200 sm:h-64">
+                    <Map height={256} center={mapCenter} defaultZoom={13} onClick={handleMapClick}>
+                      {mapPosition && <Marker width={40} anchor={mapPosition} />}
+                    </Map>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Pilih titik pada peta untuk mengisi alamat secara otomatis.</p>
+                </div>
+              </section>
+
+              <section id="paket-langganan" className="scroll-mt-4 border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center bg-[#21AC3A]/10 text-xs font-bold text-[#21AC3A]">03</span>
+                    <div>
+                      <h2 className="font-semibold">Paket langganan</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">Pilih paket sesuai skala dan kebutuhan bisnis Anda.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6">
+                  <button
+                    type="button"
+                    aria-pressed={newBusinessPlan === 'UMKM'}
+                    onClick={() => setNewBusinessPlan('UMKM')}
+                    className={`relative border p-4 text-left transition-colors cursor-pointer ${newBusinessPlan === 'UMKM' ? 'border-[#21AC3A] bg-[#21AC3A]/5 ring-1 ring-[#21AC3A]' : 'border-slate-300 bg-white hover:border-slate-400'}`}
+                  >
+                    {newBusinessPlan === 'UMKM' && <Check className="absolute right-3 top-3 h-4 w-4 text-[#21AC3A]" />}
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center bg-[#21AC3A]/10 text-[#21AC3A]"><Store className="h-5 w-5" /></span>
+                      <div>
+                        <div className="font-semibold">UMKM</div>
+                        <div className="text-xs text-slate-500">Rp 29.000 / bulan</div>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-600">
+                      <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#21AC3A]" />Point of Sales (POS)</li>
+                      <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#21AC3A]" />Manajemen stok dasar</li>
+                    </ul>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={newBusinessPlan === 'Enterprise'}
+                    onClick={() => setNewBusinessPlan('Enterprise')}
+                    className={`relative border p-4 text-left transition-colors cursor-pointer ${newBusinessPlan === 'Enterprise' ? 'border-[#21AC3A] bg-[#21AC3A]/5 ring-1 ring-[#21AC3A]' : 'border-slate-300 bg-white hover:border-slate-400'}`}
+                  >
+                    {newBusinessPlan === 'Enterprise' && <Check className="absolute right-3 top-3 h-4 w-4 text-[#21AC3A]" />}
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center bg-[#21AC3A]/10 text-[#21AC3A]"><Crown className="h-5 w-5" /></span>
+                      <div>
+                        <div className="font-semibold">Enterprise</div>
+                        <div className="text-xs text-slate-500">Rp 149.000 / bulan</div>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-600">
+                      <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#21AC3A]" />Semua fitur UMKM</li>
+                      <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#21AC3A]" />Customer Management (CRM)</li>
+                      <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#21AC3A]" />Employee Management (HR)</li>
+                    </ul>
+                  </button>
+                </div>
+              </section>
+
+              <section id="durasi-langganan" className="scroll-mt-4 border border-slate-200 bg-white">
+                <div className="border-b border-slate-200 px-5 py-4 sm:px-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center bg-[#21AC3A]/10 text-xs font-bold text-[#21AC3A]">04</span>
+                    <div>
+                      <h2 className="font-semibold">Durasi langganan</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">Pilih durasi pembayaran di muka.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 p-5 sm:grid-cols-5 sm:p-6">
+                  {[
+                    { label: '1 Bulan', value: 1 },
+                    { label: '3 Bulan', value: 3 },
+                    { label: '6 Bulan', value: 6 },
+                    { label: '1 Tahun', value: 12 },
+                    { label: '2 Tahun', value: 24 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      aria-pressed={durationMonths === opt.value}
+                      onClick={() => setDurationMonths(opt.value)}
+                      className={`border px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer ${durationMonths === opt.value ? 'border-[#21AC3A] bg-[#21AC3A] text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-[#21AC3A]'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <div className="flex flex-col-reverse justify-between gap-3 border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:px-6">
+                <p className="text-xs text-slate-500"><span className="text-red-600">*</span> Wajib diisi</p>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => navigate('/dashboard')} className="border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">Batal</button>
+                  <button
+                    type="submit"
+                    disabled={!newBusinessName.trim() || !address.trim() || isSubmitting}
+                    className="inline-flex items-center justify-center gap-2 bg-[#21AC3A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? <><span className="h-4 w-4 animate-spin border-2 border-white/40 border-t-white" /><span>Memproses...</span></> : <span>Buat bisnis</span>}
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-900 mb-2">Durasi Langganan</label>
-            <p className="text-sm text-slate-500 mb-4">Pilih berapa lama Anda ingin berlangganan (bayar di muka).</p>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-              {[
-                { label: '1 Bulan', value: 1 },
-                { label: '3 Bulan', value: 3 },
-                { label: '6 Bulan', value: 6 },
-                { label: '1 Tahun', value: 12 },
-                { label: '2 Tahun', value: 24 },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setDurationMonths(opt.value)}
-                  className={`py-2 px-1 text-center rounded-lg border text-sm font-semibold transition-colors cursor-pointer ${
-                    durationMonths === opt.value
-                      ? 'border-[#21AC3A] bg-[#21AC3A] text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-6 border-t border-slate-100 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-slate-500 font-medium mb-1">Total Pembayaran</p>
-              <p className="text-2xl font-bold text-[#21AC3A]">
-                Rp {((newBusinessPlan === 'UMKM' ? 29000 : 149000) * durationMonths).toLocaleString('id-ID')}
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={!newBusinessName.trim() || !address.trim() || isSubmitting}
-                className="px-6 py-2.5 text-sm font-semibold text-white bg-[#21AC3A] hover:bg-[#1d9732] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer shadow-sm shadow-[#21AC3A]/20 flex items-center justify-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Memproses...</span>
-                  </>
-                ) : (
-                  <span>Buat Bisnis</span>
-                )}
-              </button>
             </div>
           </div>
         </form>
+
+        <aside className="space-y-4 lg:sticky lg:top-4">
+          <section className="border border-slate-200 border-t-2 border-t-[#21AC3A] bg-white">
+            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+              <CreditCard className="h-4 w-4 text-[#21AC3A]" />
+              <h2 className="text-sm font-semibold">Ringkasan pesanan</h2>
+            </div>
+            <div className="space-y-4 p-4">
+              <div>
+                <p className="text-xs text-slate-500">Nama bisnis</p>
+                <p className="mt-1 break-words text-sm font-medium">{newBusinessName.trim() || 'Belum diisi'}</p>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-xs text-slate-500">Paket terpilih</p>
+                <p className="mt-1 text-sm font-semibold">{newBusinessPlan}</p>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-xs text-slate-500">Durasi langganan</p>
+                <p className="mt-1 text-sm font-medium">{durationMonths} bulan</p>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <div className="flex items-end justify-between gap-2">
+                  <span className="text-sm font-medium">Total</span>
+                  <span className="text-lg font-semibold text-[#21AC3A]">Rp {totalPrice.toLocaleString('id-ID')}</span>
+                </div>
+                <p className="mt-1 text-right text-xs text-slate-500">Pembayaran di muka</p>
+              </div>
+            </div>
+          </section>
+          <section className="border border-slate-200 bg-white p-4">
+            <div className="flex items-start gap-3">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#21AC3A]" />
+              <div>
+                <h3 className="text-sm font-semibold">Tentang paket</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Pilih paket yang sesuai. Detail paket dan durasi dapat ditinjau sebelum pembayaran.</p>
+              </div>
+            </div>
+          </section>
+          <div className="flex items-center gap-2 border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-[#21AC3A]" />
+            Informasi bisnis Anda tersimpan dengan aman.
+          </div>
+        </aside>
       </motion.div>
     </div>
   );
