@@ -270,14 +270,19 @@ export default function DashboardLayout() {
                 className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/50 focus:border-[#21AC3A] transition-all w-64"
               />
             </div>
-            <div className={`relative ${isDashboardHome ? 'hidden' : ''}`}>
+            <div className="relative">
               <button
+                type="button"
                 onClick={() => setIsNotificationDropdownOpen(!isNotificationDropdownOpen)}
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors relative cursor-pointer"
+                aria-label={pendingPaymentOrgs.length > 0 ? `Notifikasi pembayaran, ${pendingPaymentOrgs.length} belum dibayar` : 'Notifikasi pembayaran'}
+                aria-expanded={isNotificationDropdownOpen}
+                className={`relative p-2 transition-colors cursor-pointer ${isDashboardHome ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-500 hover:bg-slate-100'} ${isNotificationDropdownOpen ? 'bg-slate-100' : ''}`}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="h-5 w-5" />
                 {pendingPaymentOrgs.length > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center border-2 border-white bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
+                    {pendingPaymentOrgs.length > 9 ? '9+' : pendingPaymentOrgs.length}
+                  </span>
                 )}
               </button>
 
