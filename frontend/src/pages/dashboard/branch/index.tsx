@@ -153,6 +153,8 @@ export default function BranchDashboard() {
   const [seriesLoading, setSeriesLoading] = useState(false);
   const [productQuery, setProductQuery] = useState('');
   const [isProductDropdownOpen, setIsProductDropdownOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const productDropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchDashboard = async () => {
@@ -288,6 +290,35 @@ export default function BranchDashboard() {
 
   const recentTransactions = data?.recent_orders ?? [];
 
+  const getMockChatReply = (question: string) => {
+    const prompt = question.toLowerCase();
+    if (prompt.includes('stok') || prompt.includes('pesan ulang')) {
+      const suggestedProduct = forecastItems[0];
+      const productSuggestion = suggestedProduct
+        ? ` Prioritas proyeksi saat ini: ${suggestedProduct.name}, disarankan pesan ${suggestedProduct.recommended_reorder_qty} unit.`
+        : '';
+      return `Ada ${metrics?.low_stock_count ?? 0} produk dengan stok menipis dan ${metrics?.out_of_stock_count ?? 0} produk yang habis.${productSuggestion} Periksa menu stok untuk detail lengkap.`;
+    }
+    if (prompt.includes('penjualan') || prompt.includes('transaksi')) {
+      return `Hari ini tercatat ${formatCompactIDR(metrics?.revenue_today ?? 0)} dari ${metrics?.orders_today ?? 0} transaksi. Total pelanggan terdaftar: ${metrics?.customers_total ?? 0}.`;
+    }
+    if (prompt.includes('laris') || prompt.includes('produk')) {
+      return `Ringkasan saat ini mencatat ${metrics?.items_sold_today ?? 0} item terjual hari ini. Peringkat produk terlaris belum tersedia di ringkasan dashboard ini.`;
+    }
+    return `Saya bisa membantu membaca ringkasan cabang. Hari ini ada ${metrics?.orders_today ?? 0} transaksi, penjualan ${formatCompactIDR(metrics?.revenue_today ?? 0)}, dan ${metrics?.low_stock_count ?? 0} produk dengan stok menipis.`;
+  };
+
+  const sendChatMessage = (message = chatInput.trim()) => {
+    const content = message.trim();
+    if (!content) return;
+    setChatMessages((messages) => [
+      ...messages,
+      { role: 'user', content },
+      { role: 'assistant', content: getMockChatReply(content) },
+    ]);
+    setChatInput('');
+  };
+
   if (isLoading && !data) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[60vh]">
@@ -422,28 +453,68 @@ export default function BranchDashboard() {
             </div>
             <span className="border border-[#21AC3A]/30 bg-[#21AC3A]/10 px-2.5 py-1 text-xs font-medium text-[#16852A]">Pratinjau</span>
           </div>
-          <div className="flex-1 p-4">
-            <div className="flex gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-[#21AC3A] text-white"><Sparkles className="h-5 w-5" /></span>
-              <div className="min-w-0 flex-1 bg-slate-100 p-4 text-sm leading-6 text-slate-700">
-                <p className="mb-1 font-semibold text-slate-800">ABAI</p>
-                <p>Selamat pagi! Penjualan hari ini {formatCompactIDR(metrics?.revenue_today ?? 0)} dari {metrics?.orders_today ?? 0} transaksi. Ada {metrics?.low_stock_count ?? 0} produk dengan stok menipis yang perlu diperiksa.</p>
+          <div className="flex min-h-0 flex-1 flex-col p-4">
+            <div className="max-h-72 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
+              <div className="flex gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white"><Sparkles className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1 bg-slate-100 p-3 text-xs leading-5 text-slate-700">
+                  <p className="mb-1 font-semibold text-slate-800">ABAI</p>
+                  <p>Selamat pagi! Penjualan hari ini {formatCompactIDR(metrics?.revenue_today ?? 0)} dari {metrics?.orders_today ?? 0} transaksi. Ada {metrics?.low_stock_count ?? 0} produk dengan stok menipis yang perlu diperiksa.</p>
+                </div>
               </div>
-            </div>
-            <p className="mb-3 mt-5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Pertanyaan yang disarankan</p>
-            <div className="space-y-2">
-              {['Apa yang perlu saya pesan ulang?', 'Ringkas penjualan hari ini', 'Produk apa yang paling laris?'].map((question) => (
-                <div key={question} className="flex items-center justify-between gap-2 border border-slate-200 px-3 py-3 text-xs text-slate-700">
-                  <span>{question}</span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-[#21AC3A]" />
+              {chatMessages.map((message, index) => (
+                <div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role === 'user' ? 'justify-end' : ''}`}>
+                  {message.role === 'assistant' && (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white"><Sparkles className="h-4 w-4" /></span>
+                  )}
+                  <div className={`max-w-[85%] p-3 text-xs leading-5 ${message.role === 'user' ? 'bg-[#21AC3A] text-white' : 'min-w-0 flex-1 bg-slate-100 text-slate-700'}`}>
+                    {message.content}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex items-center gap-2 border border-slate-300 px-3 py-3 text-sm text-slate-400">
-              <span className="flex-1">Tanya ABAI tentang bisnis Anda...</span>
-              <Send className="h-3.5 w-3.5 text-slate-400" />
-            </div>
-            <p className="mt-3 text-center text-[11px] leading-5 text-slate-400">Pratinjau saja. Fitur chat belum tersedia.</p>
+            {chatMessages.length === 0 && (
+              <div className="mt-4">
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">Pertanyaan yang disarankan</p>
+                <div className="space-y-2">
+                  {['Apa yang perlu saya pesan ulang?', 'Ringkas penjualan hari ini', 'Produk apa yang paling laris?'].map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      onClick={() => sendChatMessage(question)}
+                      className="flex w-full items-center justify-between gap-2 border border-slate-200 px-3 py-2.5 text-left text-xs text-slate-700 transition-colors hover:border-[#21AC3A] hover:bg-[#21AC3A]/5"
+                    >
+                      <span>{question}</span>
+                      <ArrowRight className="h-4 w-4 shrink-0 text-[#21AC3A]" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <form
+              className="mt-auto flex shrink-0 items-center gap-2 border border-slate-300 px-3 py-2 focus-within:border-[#21AC3A]"
+              onSubmit={(event) => {
+                event.preventDefault();
+                sendChatMessage();
+              }}
+            >
+              <input
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                aria-label="Tanya ABAI"
+                placeholder="Tanya ABAI tentang bisnis Anda..."
+                className="min-w-0 flex-1 bg-transparent py-1 text-sm text-slate-800 outline-none placeholder:text-slate-400"
+              />
+              <button
+                type="submit"
+                aria-label="Kirim pesan"
+                disabled={!chatInput.trim()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </form>
+            <p className="mt-2 text-center text-[11px] leading-5 text-slate-400">Simulasi lokal · Tidak terhubung ke layanan AI</p>
           </div>
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-slate-600">
