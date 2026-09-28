@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Zap, Mail, Phone } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  PackageCheck,
+  ScanBarcode,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { isValidIndonesianMobilePhone } from '../../utils/phone';
 
 export default function RegisterPage() {
@@ -13,8 +20,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  
-  // (Removed inline OTP states, now using dedicated verify-otp page)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,8 +29,16 @@ export default function RegisterPage() {
       setErrorMessage('Silakan lengkapi semua field yang wajib diisi.');
       return;
     }
+
+    if (password.length < 6) {
+      setErrorMessage('Password harus terdiri dari minimal 6 karakter.');
+      return;
+    }
+
     if (!isValidIndonesianMobilePhone(phone)) {
-      setErrorMessage('Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.');
+      setErrorMessage(
+        'Masukkan nomor handphone Indonesia yang valid, misalnya 081234567890 atau +6281234567890.',
+      );
       return;
     }
 
@@ -37,12 +50,11 @@ export default function RegisterPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        // Match the backend RegisterInput struct
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           username: name,
-          email, 
-          phone, 
-          password 
+          email,
+          phone,
+          password,
         }),
       });
 
@@ -52,214 +64,216 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Pendaftaran gagal. Silakan coba lagi.');
       }
 
-      // Move to separate OTP step
       navigate(`/auth/verify-otp?email=${encodeURIComponent(email)}`);
-      setErrorMessage('');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between relative overflow-hidden font-sans text-slate-900">
-      {/* Background Decorative Accent Elements */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-[#21AC3A]" />
-      <div className="absolute top-12 left-10 w-96 h-96 bg-[#21AC3A]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-96 h-96 bg-slate-200/50 rounded-full blur-3xl -z-10 pointer-events-none" />
-
-      {/* Top Header Navigation */}
-      <header className="p-6 max-w-7xl w-full mx-auto flex justify-between items-center">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-[#21AC3A] transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Beranda</span>
+    <div className="flex min-h-screen flex-col bg-[#F5F5F5] font-sans text-[#242424]">
+      <header className="flex h-14 shrink-0 items-center justify-between bg-[#252525] px-6 text-white">
+        <Link to="/" className="flex items-center gap-2.5" aria-label="Simpl beranda">
+          <img src="/simpl-logo-dark.png" alt="Simpl" className="h-7 w-auto object-contain" />
+          <span className="rounded-full bg-[#EAF7EC] px-2 py-0.5 text-[11px] font-semibold text-[#21AC3A]">
+            Business management
+          </span>
         </Link>
-        <div className="flex items-center gap-2">
-          <img src="/simpl-logo-dark.png" alt="SIMPL Logo" className="h-6 object-contain" />
-        </div>
+        <nav className="flex items-center gap-4 text-xs text-[#D1D1D1] sm:gap-6 sm:text-[13px]">
+          <Link to="/auth/login" className="transition-colors hover:text-white">
+            Masuk
+          </Link>
+          <span className="hidden sm:inline">Pusat bantuan</span>
+          <span className="text-white">Indonesia · ID</span>
+        </nav>
       </header>
 
-      {/* Main Register Card Section */}
-      <main className="flex-1 flex items-center justify-center p-6 my-4">
-        <div className="w-full max-w-5xl grid md:grid-cols-12 bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-          {/* Left Column: Brand Highlight & Features (hidden on mobile, visible on tablet/desktop) */}
-          <div className="hidden md:flex md:col-span-5 bg-gradient-to-br from-emerald-50/80 via-slate-50 to-emerald-50/40 p-8 lg:p-10 text-slate-800 flex-col justify-between relative border-r border-slate-200/80">
-            <div>
-              <h2 className="text-2xl lg:text-3xl font-bold tracking-tight mb-4 leading-tight text-slate-900">
-                Langkah Pertama Menuju Bisnis yang Lebih Efisien
-              </h2>
-              <p className="text-slate-600 text-sm leading-relaxed mb-8">
-                Bergabunglah dengan ribuan UMKM dan Enterprise yang telah mempercayakan operasional bisnisnya pada SIMPL.
-              </p>
-            </div>
+      <main className="flex flex-1 items-stretch">
+        <aside className="hidden w-[36.1%] shrink-0 flex-col justify-between border-r border-[#D1D1D1] bg-[#F0F0F0] p-10 lg:flex xl:p-14">
+          <div className="flex flex-col gap-4.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#21AC3A]">
+              Mulai kelola bisnis lebih sederhana
+            </p>
+            <h1 className="max-w-md text-[32px] font-semibold leading-[1.18] tracking-tight text-[#242424]">
+              Semua operasional bisnis, dalam satu konsol.
+            </h1>
+            <p className="max-w-md text-sm leading-normal text-[#616161]">
+              Buat akun Simpl untuk mengelola stok, transaksi, dan pelanggan dengan lebih mudah.
+            </p>
 
-            <div className="space-y-4 border-t border-slate-200/80 pt-6">
-              <div className="flex items-center gap-3 text-xs text-slate-700 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-[#21AC3A] shrink-0" />
-                <span>Gratis uji coba 14 hari, tanpa kartu kredit</span>
+            <div className="mt-2 flex flex-col gap-3.5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-[#EAF7EC] text-[#21AC3A]">
+                  <PackageCheck className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Buku stok real-time</p>
+                  <p className="mt-0.5 text-[13px] leading-[1.4] text-[#616161]">
+                    Setiap perubahan stok tercatat dan dapat ditelusuri.
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-700 font-medium">
-                <Zap className="w-4 h-4 text-[#21AC3A] shrink-0" />
-                <span>Setup mudah dalam hitungan menit</span>
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-[#EAF7EC] text-[#21AC3A]">
+                  <ScanBarcode className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Kasir lebih cepat</p>
+                  <p className="mt-0.5 text-[13px] leading-[1.4] text-[#616161]">
+                    Catat transaksi dan perbarui stok secara instan.
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-700 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-[#21AC3A] shrink-0" />
-                <span>Dukungan tim ahli siap membantu</span>
+              <div className="flex items-start gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-[#EAF7EC] text-[#21AC3A]">
+                  <Sparkles className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold">Asisten operasional AI</p>
+                  <p className="mt-0.5 text-[13px] leading-[1.4] text-[#616161]">
+                    Tanyakan kebutuhan bisnis dalam Bahasa Indonesia.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Dynamic Form (Registration or OTP) */}
-          <div className="col-span-12 md:col-span-7 p-6 sm:p-8 lg:p-12 flex flex-col justify-center">
-              {/* --- REGISTRATION STEP --- */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="w-full"
+          <div className="flex items-center gap-2 text-[11px] text-[#616161]">
+            <ShieldCheck className="h-3.75 w-3.75 text-[#21AC3A]" />
+            <span>Data terenkripsi · Dicadangkan setiap hari</span>
+          </div>
+        </aside>
+
+        <section className="flex flex-1 items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
+          <div className="w-full max-w-120 border border-[#D1D1D1] bg-white p-6 shadow-[0_8px_24px_rgba(0,0,0,0.13)] sm:p-8">
+            <div className="mb-5.5">
+              <h2 className="text-2xl font-semibold text-[#242424]">Buat akun Simpl</h2>
+              <p className="mt-1.5 text-[13px] text-[#616161]">
+                Daftarkan akun Anda untuk mulai menggunakan Simpl.
+              </p>
+            </div>
+
+            <div className="mb-5.5 flex h-9.5 border-b border-[#D1D1D1] text-[13px]">
+              <Link
+                to="/auth/login"
+                className="flex flex-1 items-center justify-center text-[#616161] transition-colors hover:text-[#242424]"
               >
-                <div className="mb-8">
-                  <h1 className="text-2xl font-bold text-slate-900 mb-2">Daftar Akun Baru</h1>
-                  <p className="text-slate-500 text-sm">
-                    Isi data di bawah ini untuk membuat akun SIMPL Anda. Bisnis dapat dibuat nanti melalui dashboard.
-                  </p>
-                </div>
+                Masuk
+              </Link>
+              <span className="flex flex-1 items-center justify-center border-b-2 border-[#21AC3A] font-semibold text-[#21AC3A]">
+                Daftar
+              </span>
+            </div>
 
-                {errorMessage && (
-                  <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
-                    {errorMessage}
-                  </div>
-                )}
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                role="alert"
+                className="mb-4 border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700"
+              >
+                {errorMessage}
+              </motion.div>
+            )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Name Input */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                        Nama Lengkap
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Nama Anda"
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                        />
-                      </div>
-                    </div>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+              <div className="flex flex-col gap-1.25">
+                <label htmlFor="name" className="text-[13px] font-semibold text-[#242424]">
+                  Nama pengguna
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  autoComplete="username"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Contoh: John Doe"
+                  className="h-9.5 w-full border border-[#A19F9D] bg-white px-2.5 text-[13px] text-[#242424] outline-none transition-colors placeholder:text-[#8A8886] focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A]"
+                />
+              </div>
 
-                    {/* Email Input */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                        Email
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                          <Mail className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="nama@perusahaan.com"
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                        />
-                      </div>
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-1.25">
+                <label htmlFor="email" className="text-[13px] font-semibold text-[#242424]">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nama@gmail.com"
+                  className="h-9.5 w-full border border-[#A19F9D] bg-white px-2.5 text-[13px] text-[#242424] outline-none transition-colors placeholder:text-[#8A8886] focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A]"
+                />
+              </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Phone Input */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-                        No. Handphone
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                          <Phone className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="tel"
-                          required
-                          inputMode="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="08xxxxxxxxxx"
-                          className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                        />
-                      </div>
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-1.25">
+                <label htmlFor="phone" className="text-[13px] font-semibold text-[#242424]">
+                  Nomor handphone
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="081234567890"
+                  className="h-9.5 w-full border border-[#A19F9D] bg-white px-2.5 text-[13px] text-[#242424] outline-none transition-colors placeholder:text-[#8A8886] focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A]"
+                />
+              </div>
 
-                  {/* Password Input */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              <div className="flex flex-col gap-1.25">
+                <label htmlFor="password" className="text-[13px] font-semibold text-[#242424]">
                   Password
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </div>
                   <input
+                    id="password"
                     type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Buat password yang kuat"
-                    className="w-full pl-10 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
+                    placeholder="Buat password"
+                    className="h-9.5 w-full border border-[#A19F9D] bg-white px-2.5 pr-10 text-[13px] text-[#242424] outline-none transition-colors placeholder:text-[#8A8886] focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                    className="absolute inset-y-0 right-0 flex items-center px-2.5 text-[#616161] hover:text-[#242424]"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <p className="text-[11px] leading-[1.35] text-[#8A8886]">Minimal 6 karakter.</p>
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3.5 px-4 mt-2 rounded-xl font-bold text-white bg-[#21AC3A] hover:bg-[#1d9732] active:scale-[0.99] transition-all duration-200 cursor-pointer shadow-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="mt-1 flex h-9 w-full items-center justify-center border border-[#21AC3A] bg-[#21AC3A] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Memproses...</span>
-                  </>
-                ) : (
-                  <span>Daftar Sekarang</span>
-                )}
+                {isLoading ? 'Memproses...' : 'Buat akun'}
               </button>
             </form>
 
-            {/* Bottom Login Prompt */}
-            <div className="mt-8 pt-6 border-t border-slate-100 text-center text-xs text-slate-500">
-              Sudah memiliki akun?{' '}
-              <Link
-                to="/auth/login"
-                className="font-bold text-[#21AC3A] hover:underline cursor-pointer"
-              >
-                Masuk di sini
+            <div className="mt-5 flex justify-center gap-1.5 text-[13px]">
+              <span className="text-[#616161]">Sudah punya akun?</span>
+              <Link to="/auth/login" className="font-semibold text-[#21AC3A] hover:underline">
+                Masuk
               </Link>
             </div>
-            </motion.div>
           </div>
-        </div>
+        </section>
       </main>
-
-      {/* Footer */}
-      <footer className="p-6 text-center text-xs text-slate-500">
-        © {new Date().getFullYear()} SIMPL — Scalable Integrated Management System.
-      </footer>
     </div>
   );
 }
