@@ -13,6 +13,40 @@ import (
 
 var DB *gorm.DB
 
+// AIDB is the connection used by the AI assistant's MCP tools. It points at a
+// dedicated read-only role when AI_DB_USER is configured and otherwise falls
+// back to the primary connection.
+var AIDB *gorm.DB
+
+// ConnectAIDB opens the read-only connection used by AI tools. Call it after
+// ConnectDB; when the AI role is not configured it reuses the primary DB.
+func ConnectAIDB() {
+	if DB == nil {
+		AIDB = nil
+		return
+	}
+
+	user := os.Getenv("AI_DB_USER")
+	if user == "" {
+		AIDB = DB
+		log.Println("AI tools use the primary connection (AI_DB_USER not configured).")
+		return
+	}
+
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=Asia/Jakarta",
+		os.Getenv("DB_HOST"), user, os.Getenv("AI_DB_PASSWORD"), os.Getenv("DB_NAME"), os.Getenv("DB_PORT"))
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Printf("Failed to connect as AI_DB_USER %q: %v. Falling back to the primary connection.", user, err)
+		AIDB = DB
+		return
+	}
+
+	AIDB = db
+	log.Println("AI tools use the read-only database connection.")
+}
+
 func ConnectDB() {
 	host := os.Getenv("DB_HOST")
 	user := os.Getenv("DB_USER")
@@ -62,6 +96,7 @@ func ConnectDB() {
 		&models.LoyaltyPointLog{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.AIChatLog{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)
