@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
   AlertCircle,
   Award,
-  ChevronRight,
   Coins,
   Eye,
   Filter,
@@ -526,26 +525,14 @@ export default function CustomersIndex() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
-            <span>Cabang</span>
-            <ChevronRight className="h-4 w-4" />
-            <span className="font-medium text-slate-700">Pelanggan</span>
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Pelanggan</h1>
-          <p className="mt-1 text-sm text-slate-500">Kelola profil pelanggan, keanggotaan, dan program loyalitas.</p>
+      <header className="border-b border-slate-200 pb-4">
+        <div className="mb-3 flex items-center gap-2 text-sm">
+          <span className="font-medium text-[#21AC3A]">SIMPL</span>
+          <span className="text-slate-400">/</span>
+          <span className="text-slate-500">Manajemen pelanggan</span>
         </div>
-        {activeSection === 'customers' && (
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1d9732]"
-          >
-            <Plus className="h-4 w-4" />
-            Tambah pelanggan
-          </button>
-        )}
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Manajemen pelanggan</h1>
+        <p className="mt-1 text-sm text-slate-500">Profil, segmen, dan riwayat pembelian pelanggan.</p>
       </header>
 
       <nav className="mb-6 flex items-center gap-6 border-b border-slate-200" aria-label="Bagian pelanggan">
@@ -574,7 +561,7 @@ export default function CustomersIndex() {
       {activeSection === 'customers' ? (
       <>
       {errorMessage && (
-        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="flex items-center justify-between gap-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMessage}</span>
@@ -585,50 +572,74 @@ export default function CustomersIndex() {
         </div>
       )}
 
-      <section aria-label="Ringkasan pelanggan" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="flex items-center gap-3 border-l-4 border-[#0875d1] bg-blue-50 px-4 py-3 text-sm text-slate-700">
+        <UsersRound className="h-5 w-5 shrink-0 text-[#0875d1]" />
+        <p><span className="mr-2 text-xs font-bold uppercase tracking-wide text-[#0875d1]">CRS</span>Profil pelanggan dan riwayat pembelian tersinkron dari Point of Sale.</p>
+      </div>
+
+      <section aria-label="Ringkasan pelanggan" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          icon={<UsersRound className="h-6 w-6" />}
+          icon={<UsersRound className="h-4 w-4" />}
           label="Total pelanggan"
           value={stats.total_customers.toLocaleString('id-ID')}
+          note="Profil terdaftar"
           tone="blue"
         />
         <MetricCard
-          icon={<UserRoundPlus className="h-6 w-6" />}
-          label="Pelanggan baru"
-          value={stats.new_customers.toLocaleString('id-ID')}
+          icon={<Repeat2 className="h-4 w-4" />}
+          label="Tingkat pelanggan berulang"
+          value={`${stats.returning_rate.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+          note={`${stats.returning_customers.toLocaleString('id-ID')} pelanggan kembali`}
           tone="green"
         />
         <MetricCard
-          icon={<Repeat2 className="h-6 w-6" />}
-          label="Tingkat pelanggan berulang"
-          value={`${stats.returning_rate.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-          tone="amber"
+          icon={<Wallet className="h-4 w-4" />}
+          label="Rata-rata belanja pelanggan"
+          value={formatRupiah(stats.total_customers ? Math.round(stats.lifetime_value_idr / stats.total_customers) : 0)}
+          note="Total nilai belanja per profil"
+          tone="blue"
         />
         <MetricCard
-          icon={<Wallet className="h-6 w-6" />}
-          label="Total nilai belanja"
-          value={formatRupiah(stats.lifetime_value_idr)}
-          tone="violet"
+          icon={<UserRoundPlus className="h-4 w-4" />}
+          label="Pelanggan baru"
+          value={stats.new_customers.toLocaleString('id-ID')}
+          note="Belum lebih dari 1 transaksi lunas"
+          tone="amber"
         />
       </section>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between gap-4">
-          <div className="relative w-full sm:w-96">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <section className="min-w-0 overflow-hidden border border-slate-300 bg-white">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-300 px-4 py-3 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Direktori pelanggan</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{stats.total_customers.toLocaleString('id-ID')} profil · Pelanggan baru dan berulang</p>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="inline-flex min-h-10 items-center justify-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732]"
+          >
+            <Plus className="h-4 w-4" />
+            Tambah pelanggan
+          </button>
+        </div>
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-300 px-3 py-2.5 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               placeholder="Cari nama, email, atau nomor telepon pelanggan..."
               value={searchQuery}
               onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1); }}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
+              className="min-h-10 w-full border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
             />
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
+          <div className="flex items-center gap-2">
+            <div className="flex min-h-10 items-center gap-2 border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
               <Filter className="w-4 h-4 text-slate-400" />
               <select
-                className="bg-transparent outline-none cursor-pointer"
+                className="cursor-pointer bg-transparent outline-none"
                 value={customerFilter}
                 onChange={(event) => { setCustomerFilter(event.target.value as typeof customerFilter); setCurrentPage(1); }}
                 aria-label="Filter pelanggan"
@@ -643,22 +654,21 @@ export default function CustomersIndex() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
+            <thead className="border-b border-slate-300 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-6 py-4 font-semibold">Pelanggan</th>
-                <th className="px-6 py-4 font-semibold">Kontak</th>
-                <th className="px-6 py-4 font-semibold">Transaksi</th>
-                <th className="px-6 py-4 font-semibold">Total nilai belanja</th>
-                <th className="px-6 py-4 font-semibold">Kunjungan terakhir</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold">Loyalitas & promo</th>
-                <th className="px-6 py-4 font-semibold text-right">Aksi</th>
+                <th className="px-3 py-3 font-semibold">Pelanggan</th>
+                <th className="px-3 py-3 font-semibold">Segmen</th>
+                <th className="px-3 py-3 font-semibold">Pesanan</th>
+                <th className="px-3 py-3 font-semibold">Belanja seumur hidup</th>
+                <th className="px-3 py-3 font-semibold">Pesanan terakhir</th>
+                <th className="px-3 py-3 font-semibold">Loyalitas</th>
+                <th className="px-3 py-3 text-right font-semibold">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="mb-2 h-8 w-8 animate-spin text-[#21AC3A]" />
                       <p>Memuat data pelanggan...</p>
@@ -667,7 +677,7 @@ export default function CustomersIndex() {
                 </tr>
               ) : customers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
                     {errorMessage ? 'Data pelanggan gagal dimuat.' : 'Pelanggan tidak ditemukan atau tidak sesuai dengan pencarian dan filter.'}
                   </td>
                 </tr>
@@ -679,35 +689,31 @@ export default function CustomersIndex() {
                     key={customer.id}
                     className="hover:bg-slate-50/50 transition-colors"
                   >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center text-sm font-bold shrink-0">
+                    <td className="px-3 py-2.5">
+                      <div className="flex min-w-56 items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-green-200 bg-green-50 text-xs font-bold text-[#16852A]">
                           {customer.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}
                         </div>
-                        <p className="font-semibold text-slate-900">{customer.name}</p>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-slate-900">{customer.name}</p>
+                          <p className="truncate text-xs text-slate-500">{customer.phone || customer.email || 'Kontak belum tersedia'}</p>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-500 font-medium">
-                      <p className="text-slate-700">{customer.phone || '—'}</p>
-                      <p className="text-xs text-slate-500">{customer.email || 'Tidak ada email'}</p>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{customer.orders.toLocaleString('id-ID')}</td>
-                    <td className="px-6 py-4 font-semibold text-slate-700">{formatRupiah(customer.lifetimeValue)}</td>
-                    <td className="px-6 py-4 text-slate-500">{formatLastVisit(customer.lastVisit)}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${customer.type === 'Returning' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                        {customer.type === 'Returning' ? 'Pelanggan berulang' : 'Pelanggan baru'}
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${customer.type === 'Returning' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>
+                        {customer.type === 'Returning' ? 'Berulang' : 'Baru'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="space-y-1.5">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${customer.membershipActive ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-                          <Award className="h-3.5 w-3.5" /> {customer.membershipActive ? `${customer.loyaltyPoints.toLocaleString('id-ID')} poin` : 'Non-member'}
-                        </span>
-
-                      </div>
+                    <td className="px-3 py-2.5 font-bold text-slate-900">{customer.orders.toLocaleString('id-ID')}</td>
+                    <td className="px-3 py-2.5 font-semibold text-slate-700">{formatRupiah(customer.lifetimeValue)}</td>
+                    <td className="px-3 py-2.5 text-slate-500">{formatLastVisit(customer.lastVisit)}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold ${customer.membershipActive ? 'text-amber-700' : 'text-slate-500'}`}>
+                        <Award className="h-3.5 w-3.5" /> {customer.membershipActive ? `${customer.loyaltyPoints.toLocaleString('id-ID')} poin` : 'Non-member'}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-3 py-2.5 text-right">
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
@@ -744,7 +750,7 @@ export default function CustomersIndex() {
           </table>
         </div>
 
-        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-300 px-3 py-3 text-sm text-slate-500 sm:flex-row">
           <div className="flex items-center gap-3">
             <span className="whitespace-nowrap">Tampilkan:</span>
             <select
@@ -753,7 +759,7 @@ export default function CustomersIndex() {
                 setItemsPerPage(Number(event.target.value));
                 setCurrentPage(1);
               }}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-[#21AC3A]"
+              className="border border-slate-300 bg-white px-2 py-1 outline-none focus:border-[#21AC3A]"
               aria-label="Jumlah pelanggan per halaman"
             >
               <option value={10}>10</option>
@@ -771,21 +777,75 @@ export default function CustomersIndex() {
               type="button"
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
             >
               Sebelumnya
             </button>
-            <button type="button" className="px-3 py-1 bg-[#21AC3A] text-white rounded">{currentPage}</button>
+            <button type="button" className="bg-[#21AC3A] px-3 py-1 text-white">{currentPage}</button>
             <button
               type="button"
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               disabled={currentPage === totalPages || totalPages === 0}
-              className="px-3 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
             >
               Berikutnya
             </button>
           </div>
         </div>
+      </section>
+
+      <aside className="space-y-4">
+        <section className="border border-slate-300 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-300 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Wawasan pelanggan</h2>
+              <p className="mt-0.5 text-xs text-slate-500">Ringkasan aktivitas pembelian</p>
+            </div>
+            <Repeat2 className="h-4 w-4 text-[#21AC3A]" />
+          </div>
+          <div className="p-4">
+            <p className="text-sm leading-6 text-slate-700">
+              <span className="font-semibold">{stats.returning_rate.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span> pelanggan telah melakukan lebih dari satu transaksi lunas.
+            </p>
+            <div className="mt-4 border-l-2 border-[#0875d1] bg-blue-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#0875d1]">Saran tindakan</p>
+              <p className="mt-1 text-sm text-slate-700">Tinjau pelanggan berulang untuk memahami kebiasaan belanja mereka.</p>
+              <button
+                type="button"
+                onClick={() => { setCustomerFilter('returning'); setCurrentPage(1); }}
+                className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-900 hover:text-[#21AC3A]"
+              >
+                Lihat pelanggan berulang <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="border border-slate-300 bg-white">
+          <div className="border-b border-slate-300 px-4 py-3">
+            <h2 className="text-sm font-semibold text-slate-900">Segmen pelanggan</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Diperbarui dari transaksi lunas</p>
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => { setCustomerFilter('returning'); setCurrentPage(1); }}
+              className="flex w-full items-center justify-between border-b border-slate-200 px-4 py-3 text-sm hover:bg-slate-50"
+            >
+              <span className="flex items-center gap-2 text-slate-700"><span className="h-2 w-2 bg-green-700" />Pelanggan berulang</span>
+              <span className="font-semibold text-slate-900">{stats.returning_customers.toLocaleString('id-ID')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCustomerFilter('new'); setCurrentPage(1); }}
+              className="flex w-full items-center justify-between px-4 py-3 text-sm hover:bg-slate-50"
+            >
+              <span className="flex items-center gap-2 text-slate-700"><span className="h-2 w-2 bg-slate-500" />Pelanggan baru</span>
+              <span className="font-semibold text-slate-900">{stats.new_customers.toLocaleString('id-ID')}</span>
+            </button>
+          </div>
+        </section>
+      </aside>
       </div>
       </>
       ) : (
@@ -988,39 +1048,39 @@ export default function CustomersIndex() {
 
       {(isCreateOpen || editingCustomer) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={closeCustomerForm} />
+          <div className="absolute inset-0 bg-slate-950/40" onClick={closeCustomerForm} />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-customer-title"
-            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 p-6">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-300 p-5">
               <div>
-                <h2 id="create-customer-title" className="text-xl font-bold text-slate-900">{editingCustomer ? 'Ubah data pelanggan' : 'Tambah pelanggan'}</h2>
+                <h2 id="create-customer-title" className="text-lg font-semibold text-slate-900">{editingCustomer ? 'Ubah data pelanggan' : 'Tambah pelanggan'}</h2>
                 <p className="mt-1 text-sm text-slate-500">{editingCustomer ? 'Perbarui informasi kontak pelanggan.' : 'Buat profil pelanggan untuk bisnis ini.'}</p>
               </div>
               <button
                 type="button"
                 onClick={closeCustomerForm}
                 disabled={isSubmitting}
-                className="cursor-pointer rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-10 w-10 items-center justify-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#21AC3A] disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Tutup dialog"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="overflow-y-auto p-6">
+            <div className="overflow-y-auto p-5">
               {createError && (
-                <div role="alert" className="mb-5 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                <div role="alert" className="mb-5 flex items-center gap-2 border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
                   <AlertCircle className="h-4 w-4 shrink-0" />
                   <span>{createError}</span>
                 </div>
               )}
-              <form id="add-customer-form" onSubmit={handleSaveCustomer} className="space-y-6">
+              <form id="add-customer-form" onSubmit={handleSaveCustomer} className="space-y-5">
                 <div className="space-y-2">
                   <label htmlFor="customer-name" className="text-sm font-semibold text-slate-700">Nama</label>
                   <input
@@ -1031,7 +1091,7 @@ export default function CustomersIndex() {
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Nama pelanggan"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
+                    className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1042,7 +1102,7 @@ export default function CustomersIndex() {
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
                     placeholder="+62 ..."
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
+                    className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1053,10 +1113,10 @@ export default function CustomersIndex() {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="pelanggan@email.com"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
+                    className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                   />
                 </div>
-                <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
+                <label className="flex cursor-pointer items-start gap-3 border border-slate-300 bg-slate-50 p-4 transition-colors hover:bg-green-50">
                   <input type="checkbox" checked={membershipActive} onChange={(event) => setMembershipActive(event.target.checked)} className="mt-1 h-4 w-4 accent-[#21AC3A]" />
                   <span><span className="block text-sm font-semibold text-slate-800">Anggota program loyalitas</span><span className="mt-1 block text-xs text-slate-500">Pelanggan dapat mengumpulkan poin dan menukarkannya dengan hadiah.</span></span>
                 </label>
@@ -1065,12 +1125,12 @@ export default function CustomersIndex() {
               </form>
             </div>
 
-            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 bg-slate-50 p-6">
+            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-slate-50 p-4">
               <button
                 type="button"
                 onClick={closeCustomerForm}
                 disabled={isSubmitting}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-10 cursor-pointer border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Batal
               </button>
@@ -1078,7 +1138,7 @@ export default function CustomersIndex() {
                 type="submit"
                 form="add-customer-form"
                 disabled={!branchId || isSubmitting}
-                className="flex items-center gap-2 rounded-xl bg-[#21AC3A] px-6 py-2.5 text-sm font-bold text-white shadow-sm shadow-[#21AC3A]/20 transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex min-h-10 items-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...</> : editingCustomer ? 'Simpan perubahan' : 'Tambah pelanggan'}
               </button>
@@ -1318,22 +1378,22 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
     <section className="space-y-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Daftar hadiah</h2>
+          <h2 className="text-xl font-semibold text-slate-900">Daftar hadiah loyalitas</h2>
           <p className="mt-1 text-sm text-slate-500">Kelola hadiah, kuota, dan pelanggan yang dapat menukarkannya.</p>
         </div>
-        <button type="button" onClick={() => { resetForm(); setIsFormOpen(true); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1d9732]">
+        <button type="button" onClick={() => { resetForm(); setIsFormOpen(true); }} className="inline-flex min-h-10 items-center justify-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732]">
           <Plus className="h-4 w-4" /> Tambah hadiah
         </button>
       </div>
-      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className=" border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col justify-between gap-4 border-b border-slate-100 p-4 sm:flex-row">
-          <div className="relative w-full sm:w-96">
+      <div className="flex flex-col overflow-hidden border border-slate-300 bg-white">
+        <div className="flex flex-col justify-between gap-3 border-b border-slate-300 px-3 py-2.5 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input type="search" value={rewardSearch} onChange={(event) => { setRewardSearch(event.target.value); setCurrentPage(1); }} placeholder="Cari nama atau deskripsi hadiah..." aria-label="Cari hadiah" className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]" />
+            <input type="search" value={rewardSearch} onChange={(event) => { setRewardSearch(event.target.value); setCurrentPage(1); }} placeholder="Cari nama atau deskripsi hadiah..." aria-label="Cari hadiah" className="min-h-10 w-full border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
           </div>
-          <div className="flex items-center gap-2 self-start rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 sm:self-auto">
+          <div className="flex min-h-10 items-center gap-2 self-start border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 sm:self-auto">
             <Filter className="h-4 w-4 text-slate-400" />
             <select value={rewardStatusFilter} onChange={(event) => { setRewardStatusFilter(event.target.value as typeof rewardStatusFilter); setCurrentPage(1); }} aria-label="Filter status hadiah" className="cursor-pointer bg-transparent outline-none">
               <option value="all">Semua status</option>
@@ -1345,39 +1405,39 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
 
         <div className="overflow-x-auto">
           <table className="w-full whitespace-nowrap text-left text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
+            <thead className="border-b border-slate-300 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-6 py-4 font-semibold">Hadiah</th>
-                <th className="px-6 py-4 font-semibold">Syarat penukaran</th>
-                <th className="px-6 py-4 font-semibold">Kuota</th>
-                <th className="px-6 py-4 font-semibold">Penerima</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 text-right font-semibold">Aksi</th>
+                <th className="px-3 py-2.5 font-semibold">Hadiah</th>
+                <th className="px-3 py-2.5 font-semibold">Syarat penukaran</th>
+                <th className="px-3 py-2.5 font-semibold">Kuota</th>
+                <th className="px-3 py-2.5 font-semibold">Penerima</th>
+                <th className="px-3 py-2.5 font-semibold">Status</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {loading ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-[#21AC3A]" />Memuat hadiah...</td></tr>
+                <tr><td colSpan={6} className="px-3 py-10 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-[#21AC3A]" />Memuat hadiah...</td></tr>
               ) : visibleRewards.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">{error ? 'Data hadiah gagal dimuat.' : rewards.length === 0 ? 'Belum ada hadiah. Tambahkan hadiah untuk memulai program loyalitas.' : 'Tidak ada hadiah yang sesuai dengan pencarian dan filter.'}</td></tr>
+                <tr><td colSpan={6} className="px-3 py-10 text-center text-slate-500">{error ? 'Data hadiah gagal dimuat.' : rewards.length === 0 ? 'Belum ada hadiah. Tambahkan hadiah untuk memulai program loyalitas.' : 'Tidak ada hadiah yang sesuai dengan pencarian dan filter.'}</td></tr>
               ) : visibleRewards.map((reward) => (
                 <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={reward.id} className="transition-colors hover:bg-slate-50/50">
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-2.5">
                     <p className="font-semibold text-slate-900">{reward.name}</p>
                     {reward.description && <p className="mt-1 max-w-sm truncate text-xs text-slate-500">{reward.description}</p>}
                   </td>
-                  <td className="px-6 py-4 text-slate-600">
+                  <td className="px-3 py-2.5 text-slate-600">
                     <p className="font-semibold text-slate-800">{reward.points_required.toLocaleString('id-ID')} poin</p>
                     <p className="mt-1 text-xs">Diskon {formatRewardDiscount(reward)}</p>
                     {reward.ends_at && <p className="mt-1 text-xs text-slate-400">Berakhir {formatDateTime(reward.ends_at)}</p>}
                   </td>
-                  <td className="px-6 py-4 text-slate-600">{reward.usage_limit == null ? 'Tanpa batas' : `${reward.usage_count.toLocaleString('id-ID')} / ${reward.usage_limit.toLocaleString('id-ID')}`}</td>
-                  <td className="px-6 py-4 text-slate-600">{reward.customer_ids.length === 0 ? 'Semua pelanggan' : `${reward.customer_ids.length} pelanggan tertentu`}</td>
-                  <td className="px-6 py-4"><span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${reward.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{reward.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-2.5 text-slate-600">{reward.usage_limit == null ? 'Tanpa batas' : `${reward.usage_count.toLocaleString('id-ID')} / ${reward.usage_limit.toLocaleString('id-ID')}`}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{reward.customer_ids.length === 0 ? 'Semua pelanggan' : `${reward.customer_ids.length} pelanggan tertentu`}</td>
+                  <td className="px-3 py-2.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${reward.is_active ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>{reward.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
+                  <td className="px-3 py-2.5 text-right">
                     <div className="inline-flex items-center gap-2">
-                      <button type="button" onClick={() => editReward(reward)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Ubah</button>
-                      <button type="button" disabled={!reward.is_active} onClick={() => void deleteReward(reward)} className="rounded-lg border border-red-100 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">Nonaktifkan</button>
+                      <button type="button" onClick={() => editReward(reward)} className=" border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Ubah</button>
+                      <button type="button" disabled={!reward.is_active} onClick={() => void deleteReward(reward)} className=" border border-red-100 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">Nonaktifkan</button>
                     </div>
                   </td>
                 </motion.tr>
@@ -1385,84 +1445,84 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
             </tbody>
           </table>
         </div>
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-100 p-4 text-sm text-slate-500 sm:flex-row">
+        <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-300 px-3 py-3 text-sm text-slate-500 sm:flex-row">
           <div className="flex items-center gap-3">
             <span className="whitespace-nowrap">Tampilkan:</span>
-            <select value={itemsPerPage} onChange={(event) => { setItemsPerPage(Number(event.target.value)); setCurrentPage(1); }} aria-label="Jumlah hadiah per halaman" className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 outline-none focus:border-[#21AC3A]">
+            <select value={itemsPerPage} onChange={(event) => { setItemsPerPage(Number(event.target.value)); setCurrentPage(1); }} aria-label="Jumlah hadiah per halaman" className=" border border-slate-300 bg-white px-2 py-1 outline-none focus:border-[#21AC3A]">
               <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
             </select>
             <span className="whitespace-nowrap">Menampilkan {visibleRewards.length.toLocaleString('id-ID')} dari {filteredRewards.length.toLocaleString('id-ID')} hadiah</span>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setCurrentPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Sebelumnya</button>
+            <button type="button" onClick={() => setCurrentPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className=" border border-slate-200 px-3 py-1.5 font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Sebelumnya</button>
             <span className="px-2">Halaman {page} / {totalPages}</span>
-            <button type="button" onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Berikutnya</button>
+            <button type="button" onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className=" border border-slate-200 px-3 py-1.5 font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Berikutnya</button>
           </div>
         </div>
       </div>
-      <p className="text-xs text-slate-500">Catatan: koreksi dan penukaran poin tercatat di profil pelanggan. Poin otomatis dari transaksi dan penerapan diskon hadiah memerlukan integrasi POS.</p>
+      <p className="border-l-4 border-[#0875d1] bg-blue-50 px-3 py-3 text-sm text-slate-700">Catatan: koreksi dan penukaran poin tercatat di profil pelanggan. Poin otomatis dari transaksi dan penerapan diskon hadiah memerlukan integrasi POS.</p>
 
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} role="dialog" aria-modal="true" aria-labelledby="reward-form-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} role="dialog" aria-modal="true" aria-labelledby="reward-form-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border border-slate-300 bg-white shadow-2xl">
             <form onSubmit={saveReward} className="space-y-4 p-5 sm:p-6">
-          {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+          {error && <div role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+          <div className="flex items-start justify-between gap-4 border-b border-slate-300 pb-4">
             <div>
               <h3 id="reward-form-title" className="font-bold text-slate-900">{editing ? 'Ubah hadiah' : 'Tambah hadiah'}</h3>
               <p className="mt-1 text-sm text-slate-500">Atur nilai diskon, kuota, dan masa berlaku penukaran.</p>
             </div>
-            <button type="button" onClick={resetForm} aria-label="Tutup formulir hadiah" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>
+            <button type="button" onClick={resetForm} aria-label="Tutup formulir hadiah" className="inline-flex h-10 w-10 items-center justify-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#21AC3A]"><X className="h-5 w-5" /></button>
           </div>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Nama hadiah
-            <input required maxLength={255} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Diskon member" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            <input required maxLength={255} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Diskon member" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
           </label>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Deskripsi
-            <textarea maxLength={1000} rows={2} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Jelaskan manfaat hadiah ini" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            <textarea maxLength={1000} rows={2} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Jelaskan manfaat hadiah ini" className="w-full resize-y border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
           </label>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Poin yang dibutuhkan
-            <input required min="1" max="1000000" type="number" value={points} onChange={(event) => setPoints(event.target.value)} placeholder="500" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            <input required min="1" max="1000000" type="number" value={points} onChange={(event) => setPoints(event.target.value)} placeholder="500" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
           </label>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Jenis diskon
-            <select value={discountType} onChange={(event) => setDiscountType(event.target.value as 'fixed' | 'percentage')} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal">
+            <select value={discountType} onChange={(event) => setDiscountType(event.target.value as 'fixed' | 'percentage')} className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20">
               <option value="fixed">Nominal tetap</option>
               <option value="percentage">Persentase</option>
             </select>
           </label>
           {discountType === 'fixed' ? (
             <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Nilai diskon (Rp)
-              <input required min="1" max="1000000000000" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} placeholder="10000" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              <input required min="1" max="1000000000000" type="number" value={discount} onChange={(event) => setDiscount(event.target.value)} placeholder="10000" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
             </label>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Diskon (%)
-                <input required min="0.01" max="100" step="0.01" type="number" value={discountPercentage} onChange={(event) => setDiscountPercentage(event.target.value)} placeholder="10" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+                <input required min="0.01" max="100" step="0.01" type="number" value={discountPercentage} onChange={(event) => setDiscountPercentage(event.target.value)} placeholder="10" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
               </label>
               <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Batas maksimal (Rp, opsional)
-                <input min="1" max="1000000000000" type="number" value={maxDiscount} onChange={(event) => setMaxDiscount(event.target.value)} placeholder="Tanpa batas" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+                <input min="1" max="1000000000000" type="number" value={maxDiscount} onChange={(event) => setMaxDiscount(event.target.value)} placeholder="Tanpa batas" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
               </label>
             </div>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Kuota total (opsional)
-              <input min="1" max="2147483647" type="number" value={usageLimit} onChange={(event) => setUsageLimit(event.target.value)} placeholder="Tanpa batas" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              <input min="1" max="2147483647" type="number" value={usageLimit} onChange={(event) => setUsageLimit(event.target.value)} placeholder="Tanpa batas" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
             </label>
             <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Maks. per pelanggan (opsional)
-              <input min="1" max="2147483647" type="number" value={perCustomerLimit} onChange={(event) => setPerCustomerLimit(event.target.value)} placeholder="Tanpa batas" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              <input min="1" max="2147483647" type="number" value={perCustomerLimit} onChange={(event) => setPerCustomerLimit(event.target.value)} placeholder="Tanpa batas" className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Mulai berlaku (opsional)
-              <input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              <input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
             </label>
             <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Berakhir (opsional)
-              <input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} min={startsAt || undefined} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+              <input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} min={startsAt || undefined} className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
             </label>
           </div>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Syarat dan ketentuan
-            <textarea maxLength={2000} rows={3} value={termsAndConditions} onChange={(event) => setTermsAndConditions(event.target.value)} placeholder="Contoh: tidak dapat digabungkan dengan promo lain" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
+            <textarea maxLength={2000} rows={3} value={termsAndConditions} onChange={(event) => setTermsAndConditions(event.target.value)} placeholder="Contoh: tidak dapat digabungkan dengan promo lain" className="w-full resize-y border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
           </label>
-          <fieldset className="space-y-3 rounded-xl border border-slate-200 p-3">
+          <fieldset className="space-y-3 border border-slate-300 p-3">
             <legend className="px-1 text-sm font-semibold text-slate-700">Penerima hadiah</legend>
             <label className="flex items-start gap-2 text-sm text-slate-700">
               <input type="radio" name="reward-audience" checked={!targetSpecificCustomers} onChange={() => { setTargetSpecificCustomers(false); setTargetCustomerIDs([]); }} className="mt-0.5 accent-[#21AC3A]" />
@@ -1481,9 +1541,9 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
                     <button type="button" onClick={() => setTargetCustomerIDs([])} className="text-slate-500">Hapus pilihan</button>
                   </div>
                 </div>
-                <input type="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Cari nama, email, atau telepon" aria-label="Cari pelanggan untuk target hadiah" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                <input type="search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Cari nama, email, atau telepon" aria-label="Cari pelanggan untuk target hadiah" className="min-h-10 w-full border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
                 {customerLoadError && <p role="alert" className="text-xs text-red-600">{customerLoadError}</p>}
-                <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200">
+                <div className="max-h-52 overflow-y-auto border border-slate-300">
                   {customersLoading ? <p className="p-3 text-sm text-slate-500">Memuat pelanggan...</p> : customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).length === 0 ? (
                     <p className="p-3 text-sm text-slate-500">Pelanggan tidak ditemukan.</p>
                   ) : customers.filter((customer) => `${customer.name} ${customer.email} ${customer.phone}`.toLowerCase().includes(customerSearch.trim().toLowerCase())).map((customer) => (
@@ -1499,8 +1559,8 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
           </fieldset>
           <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="accent-[#21AC3A]" /> Hadiah aktif</label>
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1d9732] disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{editing ? 'Simpan perubahan' : 'Tambah hadiah'}</button>
-            {editing && <button type="button" onClick={resetForm} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Batal</button>}
+            <button type="submit" disabled={saving} className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{editing ? 'Simpan perubahan' : 'Tambah hadiah'}</button>
+            {editing && <button type="button" onClick={resetForm} className="min-h-10 border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Batal</button>}
           </div>
         </form>
           </motion.div>
@@ -1514,26 +1574,30 @@ function MetricCard({
   icon,
   label,
   value,
+  note,
   tone,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone: 'green' | 'blue' | 'violet' | 'amber';
+  note: string;
+  tone: 'green' | 'blue' | 'amber';
 }) {
   const tones = {
-    green: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    violet: 'bg-violet-50 text-violet-600',
-    amber: 'bg-amber-50 text-amber-600',
+    green: 'text-[#16852A]',
+    blue: 'text-[#0875d1]',
+    amber: 'text-amber-700',
   };
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className={`shrink-0 rounded-xl p-3 ${tones[tone]}`}>{icon}</div>
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-500">{label}</p>
-        <h3 className="mt-1 truncate text-2xl font-bold text-slate-900" title={value}>{value}</h3>
+    <div className="flex min-h-24 flex-col justify-between border border-slate-300 bg-white p-4">
+      <div className="flex items-center justify-between gap-3 text-sm text-slate-600">
+        <span>{label}</span>
+        <span className={tones[tone]}>{icon}</span>
+      </div>
+      <div className="mt-3 flex items-end justify-between gap-2">
+        <h3 className="truncate text-2xl font-semibold tracking-tight text-slate-900" title={value}>{value}</h3>
+        <span className="text-right text-xs text-slate-500">{note}</span>
       </div>
     </div>
   );
