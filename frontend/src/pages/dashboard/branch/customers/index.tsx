@@ -572,11 +572,6 @@ export default function CustomersIndex() {
         </div>
       )}
 
-      <div className="flex items-center gap-3 border-l-4 border-[#0875d1] bg-blue-50 px-4 py-3 text-sm text-slate-700">
-        <UsersRound className="h-5 w-5 shrink-0 text-[#0875d1]" />
-        <p><span className="mr-2 text-xs font-bold uppercase tracking-wide text-[#0875d1]">CRS</span>Profil pelanggan dan riwayat pembelian tersinkron dari Point of Sale.</p>
-      </div>
-
       <section aria-label="Ringkasan pelanggan" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           icon={<UsersRound className="h-4 w-4" />}
