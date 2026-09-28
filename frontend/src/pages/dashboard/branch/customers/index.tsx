@@ -8,7 +8,6 @@ import {
   Coins,
   Eye,
   Filter,
-  Gift,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -549,12 +548,26 @@ export default function CustomersIndex() {
         )}
       </header>
 
-      <nav className="flex w-fit gap-1 rounded-xl border border-slate-200 bg-white p-1" aria-label="Bagian pelanggan">
-        <button type="button" onClick={() => setActiveSection('customers')} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeSection === 'customers' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:text-slate-800'}`}>
+      <nav className="mb-6 flex items-center gap-6 border-b border-slate-200" aria-label="Bagian pelanggan">
+        <button
+          type="button"
+          onClick={() => setActiveSection('customers')}
+          className={`relative pb-3 text-sm font-semibold transition-colors ${activeSection === 'customers' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+        >
           Daftar pelanggan
+          {activeSection === 'customers' && (
+            <motion.div layoutId="customer-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-[#21AC3A]" />
+          )}
         </button>
-        <button type="button" onClick={() => setActiveSection('loyalty')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeSection === 'loyalty' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:text-slate-800'}`}>
-          <Award className="h-4 w-4" /> Program loyalitas
+        <button
+          type="button"
+          onClick={() => setActiveSection('loyalty')}
+          className={`relative pb-3 text-sm font-semibold transition-colors ${activeSection === 'loyalty' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+        >
+          Program loyalitas
+          {activeSection === 'loyalty' && (
+            <motion.div layoutId="customer-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-[#21AC3A]" />
+          )}
         </button>
       </nav>
 
@@ -1103,6 +1116,11 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState<LoyaltyReward | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [rewardSearch, setRewardSearch] = useState('');
+  const [rewardStatusFilter, setRewardStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [termsAndConditions, setTermsAndConditions] = useState('');
@@ -1186,6 +1204,7 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
 
   const resetForm = () => {
     setEditing(null);
+    setIsFormOpen(false);
     setName('');
     setDescription('');
     setTermsAndConditions('');
@@ -1248,6 +1267,7 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
 
   const editReward = (reward: LoyaltyReward) => {
     setEditing(reward);
+    setIsFormOpen(true);
     setName(reward.name);
     setDescription(reward.description || '');
     setTermsAndConditions(reward.terms_and_conditions || '');
@@ -1266,6 +1286,15 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
     setCustomerSearch('');
     setIsActive(reward.is_active);
   };
+
+  const filteredRewards = rewards.filter((reward) => {
+    const matchesSearch = `${reward.name} ${reward.description} ${reward.terms_and_conditions}`.toLowerCase().includes(rewardSearch.trim().toLowerCase());
+    const matchesStatus = rewardStatusFilter === 'all' || (rewardStatusFilter === 'active' ? reward.is_active : !reward.is_active);
+    return matchesSearch && matchesStatus;
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredRewards.length / itemsPerPage));
+  const page = Math.min(currentPage, totalPages);
+  const visibleRewards = filteredRewards.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   const deleteReward = async (reward: LoyaltyReward) => {
     if (!branchId || !window.confirm(`Nonaktifkan hadiah "${reward.name}"? Hadiah tetap tersimpan di riwayat penukaran.`)) return;
@@ -1287,23 +1316,103 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
 
   return (
     <section className="space-y-5">
-      <div className="rounded-2xl border border-emerald-100 bg-linear-to-r from-emerald-50 to-white p-6">
-        <div className="flex items-start gap-4">
-          <div className="rounded-xl bg-white p-3 text-emerald-700 shadow-sm"><Gift className="h-6 w-6" /></div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Program poin & hadiah</h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">Buat hadiah diskon yang bisa ditukar menggunakan poin pelanggan. Atur poin melalui detail pelanggan; riwayat penambahan dan penukaran tercatat otomatis.</p>
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Daftar hadiah</h2>
+          <p className="mt-1 text-sm text-slate-500">Kelola hadiah, kuota, dan pelanggan yang dapat menukarkannya.</p>
+        </div>
+        <button type="button" onClick={() => { resetForm(); setIsFormOpen(true); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1d9732]">
+          <Plus className="h-4 w-4" /> Tambah hadiah
+        </button>
+      </div>
+      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col justify-between gap-4 border-b border-slate-100 p-4 sm:flex-row">
+          <div className="relative w-full sm:w-96">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input type="search" value={rewardSearch} onChange={(event) => { setRewardSearch(event.target.value); setCurrentPage(1); }} placeholder="Cari nama atau deskripsi hadiah..." aria-label="Cari hadiah" className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]" />
+          </div>
+          <div className="flex items-center gap-2 self-start rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 sm:self-auto">
+            <Filter className="h-4 w-4 text-slate-400" />
+            <select value={rewardStatusFilter} onChange={(event) => { setRewardStatusFilter(event.target.value as typeof rewardStatusFilter); setCurrentPage(1); }} aria-label="Filter status hadiah" className="cursor-pointer bg-transparent outline-none">
+              <option value="all">Semua status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Nonaktif</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full whitespace-nowrap text-left text-sm">
+            <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-6 py-4 font-semibold">Hadiah</th>
+                <th className="px-6 py-4 font-semibold">Syarat penukaran</th>
+                <th className="px-6 py-4 font-semibold">Kuota</th>
+                <th className="px-6 py-4 font-semibold">Penerima</th>
+                <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 text-right font-semibold">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-[#21AC3A]" />Memuat hadiah...</td></tr>
+              ) : visibleRewards.length === 0 ? (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">{error ? 'Data hadiah gagal dimuat.' : rewards.length === 0 ? 'Belum ada hadiah. Tambahkan hadiah untuk memulai program loyalitas.' : 'Tidak ada hadiah yang sesuai dengan pencarian dan filter.'}</td></tr>
+              ) : visibleRewards.map((reward) => (
+                <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={reward.id} className="transition-colors hover:bg-slate-50/50">
+                  <td className="px-6 py-4">
+                    <p className="font-semibold text-slate-900">{reward.name}</p>
+                    {reward.description && <p className="mt-1 max-w-sm truncate text-xs text-slate-500">{reward.description}</p>}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600">
+                    <p className="font-semibold text-slate-800">{reward.points_required.toLocaleString('id-ID')} poin</p>
+                    <p className="mt-1 text-xs">Diskon {formatRewardDiscount(reward)}</p>
+                    {reward.ends_at && <p className="mt-1 text-xs text-slate-400">Berakhir {formatDateTime(reward.ends_at)}</p>}
+                  </td>
+                  <td className="px-6 py-4 text-slate-600">{reward.usage_limit == null ? 'Tanpa batas' : `${reward.usage_count.toLocaleString('id-ID')} / ${reward.usage_limit.toLocaleString('id-ID')}`}</td>
+                  <td className="px-6 py-4 text-slate-600">{reward.customer_ids.length === 0 ? 'Semua pelanggan' : `${reward.customer_ids.length} pelanggan tertentu`}</td>
+                  <td className="px-6 py-4"><span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${reward.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{reward.is_active ? 'Aktif' : 'Nonaktif'}</span></td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button type="button" onClick={() => editReward(reward)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Ubah</button>
+                      <button type="button" disabled={!reward.is_active} onClick={() => void deleteReward(reward)} className="rounded-lg border border-red-100 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">Nonaktifkan</button>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-100 p-4 text-sm text-slate-500 sm:flex-row">
+          <div className="flex items-center gap-3">
+            <span className="whitespace-nowrap">Tampilkan:</span>
+            <select value={itemsPerPage} onChange={(event) => { setItemsPerPage(Number(event.target.value)); setCurrentPage(1); }} aria-label="Jumlah hadiah per halaman" className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 outline-none focus:border-[#21AC3A]">
+              <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
+            </select>
+            <span className="whitespace-nowrap">Menampilkan {visibleRewards.length.toLocaleString('id-ID')} dari {filteredRewards.length.toLocaleString('id-ID')} hadiah</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setCurrentPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Sebelumnya</button>
+            <span className="px-2">Halaman {page} / {totalPages}</span>
+            <button type="button" onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} className="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Berikutnya</button>
           </div>
         </div>
       </div>
+      <p className="text-xs text-slate-500">Catatan: koreksi dan penukaran poin tercatat di profil pelanggan. Poin otomatis dari transaksi dan penerapan diskon hadiah memerlukan integrasi POS.</p>
 
-      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <form onSubmit={saveReward} className="h-fit space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div>
-            <h3 className="font-bold text-slate-900">{editing ? 'Ubah hadiah' : 'Tambah hadiah'}</h3>
-            <p className="mt-1 text-sm text-slate-500">Atur nilai diskon, kuota, dan masa berlaku penukaran.</p>
+      {isFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} role="dialog" aria-modal="true" aria-labelledby="reward-form-title" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-xl">
+            <form onSubmit={saveReward} className="space-y-4 p-5 sm:p-6">
+          {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+          <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h3 id="reward-form-title" className="font-bold text-slate-900">{editing ? 'Ubah hadiah' : 'Tambah hadiah'}</h3>
+              <p className="mt-1 text-sm text-slate-500">Atur nilai diskon, kuota, dan masa berlaku penukaran.</p>
+            </div>
+            <button type="button" onClick={resetForm} aria-label="Tutup formulir hadiah" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>
           </div>
           <label className="block space-y-1.5 text-sm font-semibold text-slate-700">Nama hadiah
             <input required maxLength={255} value={name} onChange={(event) => setName(event.target.value)} placeholder="Contoh: Diskon member" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-normal" />
@@ -1394,41 +1503,9 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
             {editing && <button type="button" onClick={resetForm} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Batal</button>}
           </div>
         </form>
-
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 p-5">
-            <div><h3 className="font-bold text-slate-900">Daftar hadiah</h3><p className="mt-1 text-sm text-slate-500">{rewards.length} hadiah terdaftar</p></div>
-            <Award className="h-5 w-5 text-amber-500" />
-          </div>
-          {loading ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#21AC3A]" /></div> : rewards.length === 0 ? (
-            <div className="px-5 py-12 text-center"><Gift className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Belum ada hadiah</p><p className="mt-1 text-sm text-slate-500">Tambahkan hadiah untuk memulai program loyalitas.</p></div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {rewards.map((reward) => (
-                <article key={reward.id} className="flex flex-wrap items-center justify-between gap-4 p-5">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2"><h4 className="font-semibold text-slate-900">{reward.name}</h4><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${reward.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{reward.is_active ? 'Aktif' : 'Nonaktif'}</span></div>
-                    <p className="mt-1 text-sm text-slate-600">{reward.points_required.toLocaleString('id-ID')} poin <span className="mx-1">·</span> Diskon {formatRewardDiscount(reward)}</p>
-                    {reward.description && <p className="mt-1 text-sm text-slate-500">{reward.description}</p>}
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                      {reward.usage_limit != null && <span className="rounded-full bg-slate-100 px-2 py-1">Kuota {reward.usage_count.toLocaleString('id-ID')} / {reward.usage_limit.toLocaleString('id-ID')}</span>}
-                      {reward.per_customer_limit != null && <span className="rounded-full bg-slate-100 px-2 py-1">Maks. {reward.per_customer_limit.toLocaleString('id-ID')} / pelanggan</span>}
-                      {(reward.starts_at || reward.ends_at) && <span className="rounded-full bg-slate-100 px-2 py-1">{reward.starts_at ? formatDateTime(reward.starts_at) : 'Mulai sekarang'} – {reward.ends_at ? formatDateTime(reward.ends_at) : 'tanpa kedaluwarsa'}</span>}
-                    </div>
-                    {reward.terms_and_conditions && <p className="mt-2 text-xs text-slate-400">Syarat: {reward.terms_and_conditions}</p>}
-                    <p className="mt-2 text-xs font-medium text-slate-500">Penerima: {reward.customer_ids.length === 0 ? 'Semua pelanggan' : reward.customer_ids.map((customerID) => customers.find((customer) => customer.id === customerID)?.name || 'Pelanggan').slice(0, 3).join(', ') + (reward.customer_ids.length > 3 ? ` +${reward.customer_ids.length - 3} lainnya` : '')}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => editReward(reward)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Ubah</button>
-                    <button type="button" disabled={!reward.is_active} onClick={() => void deleteReward(reward)} className="rounded-lg border border-red-100 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40">Nonaktifkan</button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
+          </motion.div>
         </div>
-      </div>
-      <p className="text-xs text-slate-500">Catatan: koreksi dan penukaran poin tercatat di profil pelanggan. Poin otomatis dari transaksi dan penerapan diskon hadiah memerlukan integrasi POS.</p>
+      )}
     </section>
   );
 }
