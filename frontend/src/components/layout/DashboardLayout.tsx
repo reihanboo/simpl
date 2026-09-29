@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
+import { normalizeEmployeeRole } from '../../utils/employee-role';
 
 const ACTIVE_BUSINESS_STORAGE_KEY = 'activeBusinessId';
 
@@ -28,12 +29,18 @@ type Organization = {
   status?: string;
   currentPeriodEnd?: string;
   snapToken?: string;
+  branchId?: string;
+  branchName?: string;
+  employeeRole?: string;
 };
 
 type BusinessApiResponse = {
   id: string;
   name: string;
   role?: string;
+  branch_id?: string;
+  branch_name?: string;
+  employee_role?: string;
   subscription?: {
     plan_id?: string;
     status?: string;
@@ -72,6 +79,8 @@ export default function DashboardLayout() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
+    localStorage.removeItem('must_change_password');
+    sessionStorage.removeItem('must_change_password');
     localStorage.removeItem(ACTIVE_BUSINESS_STORAGE_KEY);
     navigate('/auth/login');
   };
@@ -117,7 +126,10 @@ export default function DashboardLayout() {
               role: b.role || 'owner',
               status: b.subscription?.status,
               currentPeriodEnd: b.subscription?.current_period_end,
-              snapToken: b.subscription?.snap_token_midtrans
+              snapToken: b.subscription?.snap_token_midtrans,
+              branchId: b.branch_id,
+              branchName: b.branch_name,
+              employeeRole: normalizeEmployeeRole(b.employee_role),
             }));
             setOrganizations(orgs);
             const savedBusinessId = localStorage.getItem(ACTIVE_BUSINESS_STORAGE_KEY);
@@ -174,7 +186,29 @@ export default function DashboardLayout() {
   };
 
   React.useEffect(() => {
-    if (!branchId || organizations.length === 0) return;
+    if (organizations.length === 0) return;
+    const employeeOrg = organizations.find((org) => org.role === 'employee');
+    if (employeeOrg) {
+      if (employeeOrg.branchId && branchId !== employeeOrg.branchId) {
+        const employeeLanding = employeeOrg.employeeRole === 'cashier'
+          ? 'pos'
+          : employeeOrg.employeeRole === 'warehouse_staff'
+            ? 'inventory'
+            : 'employees';
+        const requestedModule = location.pathname.split('/').filter(Boolean)[3];
+        const allowedModules = employeeOrg.employeeRole === 'cashier'
+          ? ['pos']
+          : employeeOrg.employeeRole === 'warehouse_staff'
+            ? ['inventory']
+            : ['customers', 'employees', 'attendance'];
+        const destination = requestedModule && allowedModules.includes(requestedModule)
+          ? requestedModule
+          : employeeLanding;
+        navigate(`/dashboard/branch/${employeeOrg.branchId}/${destination}`, { replace: true });
+      }
+      return;
+    }
+    if (!branchId) return;
 
     const controller = new AbortController();
     const fetchBranchBusiness = async () => {
@@ -202,7 +236,7 @@ export default function DashboardLayout() {
 
     void fetchBranchBusiness();
     return () => controller.abort();
-  }, [branchId, organizations]);
+  }, [branchId, organizations, navigate, location.pathname]);
 
   const handlePayNow = (snapToken: string) => {
     if (window.snap) {
@@ -275,7 +309,7 @@ export default function DashboardLayout() {
             )}
 
             {/* Organization Selector */}
-            {!location.pathname.startsWith('/dashboard/business/new') && !location.pathname.startsWith('/dashboard/branch/') && (
+            {activeOrg?.role !== 'employee' && !location.pathname.startsWith('/dashboard/business/new') && !location.pathname.startsWith('/dashboard/branch/') && (
               <div className={`relative ${isDashboardHome ? 'ml-0' : 'ml-4 border-l border-slate-200 pl-4'}`}>
                 {activeOrg ? (
                   <button

@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { getAuthenticatedDestination } from '../../utils/auth-routing';
+import { normalizeEmployeeRole } from '../../utils/employee-role';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -57,12 +58,34 @@ export default function LoginPage() {
         throw new Error(data.error || 'Login gagal. Silakan coba lagi.');
       }
 
+      const tokenStorage = rememberMe ? localStorage : sessionStorage;
       if (rememberMe) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('remembered_identity', identity);
+        sessionStorage.removeItem('token');
       } else {
         sessionStorage.setItem('token', data.token);
+        localStorage.removeItem('token');
         localStorage.removeItem('remembered_identity');
+      }
+      localStorage.removeItem('must_change_password');
+      sessionStorage.removeItem('must_change_password');
+      if (data.requires_password_change) tokenStorage.setItem('must_change_password', '1');
+
+      if (data.requires_password_change) {
+        navigate('/auth/change-password', { replace: true });
+        return;
+      }
+
+      if (data.employee?.branch_id) {
+        const employeeRole = normalizeEmployeeRole(data.employee.role);
+        const roleLanding = employeeRole === 'cashier'
+          ? 'pos'
+          : employeeRole === 'warehouse_staff'
+            ? 'inventory'
+            : 'employees';
+        navigate(`/dashboard/branch/${data.employee.branch_id}/${roleLanding}`, { replace: true });
+        return;
       }
 
       navigate(await getAuthenticatedDestination(data.token), { replace: true });

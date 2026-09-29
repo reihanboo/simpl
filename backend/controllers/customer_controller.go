@@ -412,6 +412,13 @@ func userCanAccessBusiness(businessID, userID uuid.UUID) (bool, error) {
 	if err := config.DB.Model(&models.BusinessMember{}).Where("business_id = ? AND user_id = ?", businessID, userID).Count(&count).Error; err != nil {
 		return false, err
 	}
+	if count > 0 {
+		return true, nil
+	}
+	if err := config.DB.Model(&models.Employee{}).
+		Where("business_id = ? AND user_id = ? AND status = ?", businessID, userID, "Aktif").Count(&count).Error; err != nil {
+		return false, err
+	}
 	return count > 0, nil
 }
 

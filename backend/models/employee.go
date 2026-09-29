@@ -15,6 +15,7 @@ type Employee struct {
 	Email      string         `gorm:"type:varchar(100);not null" json:"email"`
 	Phone      string         `gorm:"type:varchar(20);not null" json:"phone"`
 	Role       string         `gorm:"type:varchar(100);not null" json:"role"`
+	UserID     *uuid.UUID     `gorm:"type:uuid;uniqueIndex" json:"-"`
 	Status     string         `gorm:"type:varchar(30);not null;default:'Aktif'" json:"status"`
 	Shift      string         `gorm:"type:varchar(100);not null;default:''" json:"shift"`
 	CreatedAt  time.Time      `json:"created_at"`

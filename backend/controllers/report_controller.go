@@ -29,9 +29,20 @@ func GetSalesReport(c *gin.Context) {
 		return
 	}
 
-	// Parse optional date range
+	branchLocation, err := utils.LoadTimezone(branch.Timezone)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Zona waktu cabang tidak valid.")
+		return
+	}
+
+	// Cashiers may use the POS transaction log for the current branch-local day only.
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
+	if employeeRole, isEmployee := c.Get("employeeRole"); isEmployee && employeeRole == "cashier" {
+		today := attendanceDateAt(time.Now(), branchLocation)
+		startDateStr = today
+		endDateStr = today
+	}
 
 	query := config.DB.Where("branch_id = ?", branchID).
 		Preload("Items").
@@ -39,13 +50,13 @@ func GetSalesReport(c *gin.Context) {
 		Order("created_at DESC")
 
 	if startDateStr != "" {
-		if startDate, err := time.Parse("2006-01-02", startDateStr); err == nil {
+		if startDate, err := time.ParseInLocation("2006-01-02", startDateStr, branchLocation); err == nil {
 			query = query.Where("created_at >= ?", startDate)
 		}
 	}
 
 	if endDateStr != "" {
-		if endDate, err := time.Parse("2006-01-02", endDateStr); err == nil {
+		if endDate, err := time.ParseInLocation("2006-01-02", endDateStr, branchLocation); err == nil {
 			// Add 1 day to include the full end date
 			query = query.Where("created_at < ?", endDate.Add(24*time.Hour))
 		}

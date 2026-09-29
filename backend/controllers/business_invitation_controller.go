@@ -278,6 +278,54 @@ func InviteBusinessMember(c *gin.Context) {
 	})
 }
 
+func RemoveBusinessMember(c *gin.Context) {
+	userIDValue, exists := c.Get("userID")
+	ownerID, valid := userIDValue.(uuid.UUID)
+	if !exists || !valid {
+		utils.RespondError(c, http.StatusUnauthorized, "Sesi Anda tidak valid. Silakan masuk kembali.")
+		return
+	}
+	businessID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "ID bisnis tidak valid.")
+		return
+	}
+	memberID, err := uuid.Parse(c.Param("user_id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "ID co-owner tidak valid.")
+		return
+	}
+	if memberID == ownerID {
+		utils.RespondError(c, http.StatusBadRequest, "Pemilik utama tidak dapat menghapus dirinya sendiri sebagai co-owner.")
+		return
+	}
+
+	var business models.Business
+	if err := config.DB.Select("id", "owner_id").First(&business, "id = ?", businessID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.RespondError(c, http.StatusNotFound, "Bisnis tidak ditemukan.")
+		} else {
+			utils.RespondError(c, http.StatusInternalServerError, "Bisnis belum dapat diverifikasi.")
+		}
+		return
+	}
+	if business.OwnerID != ownerID {
+		utils.RespondError(c, http.StatusForbidden, "Hanya pemilik utama yang dapat menghapus co-owner.")
+		return
+	}
+
+	result := config.DB.Where("business_id = ? AND user_id = ?", businessID, memberID).Delete(&models.BusinessMember{})
+	if result.Error != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Co-owner belum dapat dihapus.")
+		return
+	}
+	if result.RowsAffected == 0 {
+		utils.RespondError(c, http.StatusNotFound, "Co-owner tidak ditemukan dalam bisnis ini.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Co-owner removed"})
+}
+
 func RevokeBusinessInvitation(c *gin.Context) {
 	businessID, _, ok := authorizedBusiness(c)
 	if !ok {

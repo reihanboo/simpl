@@ -40,7 +40,7 @@ func GetProducts(c *gin.Context) {
 		ProductID         uuid.UUID `json:"product_id"`
 		Name              string    `json:"name"`
 		SKU               string    `json:"sku"`
-		CostPriceIDR      int64     `json:"cost_price_idr"`
+		CostPriceIDR      *int64    `json:"cost_price_idr,omitempty"`
 		SellingPriceIDR   int64     `json:"selling_price_idr"`
 		LowStockThreshold int       `json:"low_stock_threshold"`
 		CurrentStock      int       `json:"current_stock"`
@@ -56,12 +56,16 @@ func GetProducts(c *gin.Context) {
 			status = "Menipis"
 		}
 
+		var costPrice *int64
+		if employeeRole, isEmployee := c.Get("employeeRole"); !isEmployee || employeeRole != "cashier" {
+			costPrice = &inv.Product.CostPriceIDR
+		}
 		response = append(response, ProductResponse{
 			ID:                inv.ID, // Inventory ID
 			ProductID:         inv.Product.ID,
 			Name:              inv.Product.Name,
 			SKU:               inv.Product.SKU,
-			CostPriceIDR:      inv.Product.CostPriceIDR,
+			CostPriceIDR:      costPrice,
 			SellingPriceIDR:   inv.Product.SellingPriceIDR,
 			LowStockThreshold: inv.Product.LowStockThreshold,
 			CurrentStock:      inv.CurrentStock,
@@ -90,7 +94,7 @@ func CreateProduct(c *gin.Context) {
 		utils.RespondError(c, http.StatusUnauthorized, "Sesi tidak ditemukan")
 		return
 	}
-	
+
 	userID, ok := userIDValue.(uuid.UUID)
 	if !ok {
 		utils.RespondError(c, http.StatusUnauthorized, "Sesi tidak valid")
@@ -203,7 +207,7 @@ func AddStockMovement(c *gin.Context) {
 		utils.RespondError(c, http.StatusUnauthorized, "Sesi tidak ditemukan")
 		return
 	}
-	
+
 	userID, ok := userIDValue.(uuid.UUID)
 	if !ok {
 		utils.RespondError(c, http.StatusUnauthorized, "Sesi tidak valid")
@@ -275,8 +279,8 @@ func AddStockMovement(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Pergerakan stok berhasil dicatat",
-		"data":    movement,
+		"message":       "Pergerakan stok berhasil dicatat",
+		"data":          movement,
 		"current_stock": branchInventory.CurrentStock,
 	})
 }
@@ -301,14 +305,14 @@ func GetStockMovements(c *gin.Context) {
 	}
 
 	type MovementResponse struct {
-		ID        uuid.UUID `json:"id"`
-		Date      string    `json:"date"`
-		SKU       string    `json:"sku"`
-		Name      string    `json:"name"`
-		Type      string    `json:"type"`
-		Qty       int       `json:"qty"`
-		Reason    string    `json:"reason"`
-		User      string    `json:"user"` // just returning ID for now or hardcode if we don't join
+		ID     uuid.UUID `json:"id"`
+		Date   string    `json:"date"`
+		SKU    string    `json:"sku"`
+		Name   string    `json:"name"`
+		Type   string    `json:"type"`
+		Qty    int       `json:"qty"`
+		Reason string    `json:"reason"`
+		User   string    `json:"user"` // just returning ID for now or hardcode if we don't join
 	}
 
 	var response []MovementResponse

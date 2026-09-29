@@ -16,14 +16,16 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export default function Sidebar({ branchId, plan, status }: { branchId: string; plan?: string; status?: string }) {
+export default function Sidebar({ branchId, plan, status, employeeRole, branchName: assignedBranchName }: { branchId: string; plan?: string; status?: string; employeeRole?: string; branchName?: string }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [branchName, setBranchName] = useState('');
+  const [loadedBranchName, setLoadedBranchName] = useState('');
+  const branchName = assignedBranchName || loadedBranchName;
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (employeeRole) return;
     const controller = new AbortController();
     const fetchBranchName = async () => {
       try {
@@ -34,7 +36,7 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
         });
         if (!response.ok) return;
         const data: { branch?: { name?: string } } = await response.json();
-        if (data.branch?.name) setBranchName(data.branch.name);
+        if (data.branch?.name) setLoadedBranchName(data.branch.name);
       } catch (error) {
         if (!controller.signal.aborted) console.error('Failed to fetch branch name', error);
       }
@@ -42,7 +44,7 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
 
     fetchBranchName();
     return () => controller.abort();
-  }, [branchId]);
+  }, [branchId, employeeRole, assignedBranchName]);
   const normalizedPlan = plan?.trim().toLowerCase() || '';
   const hasEnterprisePlan = (normalizedPlan === 'enterprise' || normalizedPlan.startsWith('enterprise_')) && status?.toLowerCase() === 'active';
   const navItems = [
@@ -55,10 +57,21 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
     { name: 'Laporan', icon: <TrendingUp className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/reports` },
     { name: 'Pengaturan', icon: <Settings className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/settings` },
   ];
-  const mobilePrimaryItems = navItems.filter((item) =>
-    ['Dashboard', 'Point of Sales (POS)', 'Inventori & Stok', 'Laporan'].includes(item.name)
-  );
-  const mobileMoreItems = navItems.filter((item) => !mobilePrimaryItems.includes(item));
+  const roleNavItems = employeeRole === 'cashier'
+    ? navItems.filter((item) => item.name === 'Point of Sales (POS)')
+    : employeeRole === 'warehouse_staff'
+      ? navItems.filter((item) => item.name === 'Inventori & Stok')
+      : employeeRole === 'manager'
+        ? navItems.filter((item) => ['Pelanggan (CRS)', 'Pegawai (EMS)', 'Presensi'].includes(item.name))
+        : navItems;
+  const mobilePrimaryItems = employeeRole === 'cashier'
+    ? roleNavItems
+    : employeeRole === 'warehouse_staff'
+      ? roleNavItems
+      : employeeRole === 'manager'
+        ? roleNavItems.filter((item) => ['Pelanggan (CRS)', 'Pegawai (EMS)'].includes(item.name))
+        : roleNavItems.filter((item) => ['Dashboard', 'Point of Sales (POS)', 'Inventori & Stok', 'Laporan'].includes(item.name));
+  const mobileMoreItems = roleNavItems.filter((item) => !mobilePrimaryItems.includes(item));
   const mobileLabels: Record<string, string> = {
     Dashboard: 'Ringkasan',
     'Point of Sales (POS)': 'Kasir',
@@ -100,7 +113,7 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
           <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-wider text-slate-400">Menu</p>
         )}
         <div className="flex flex-col gap-1">
-          {navItems.map((item) => {
+          {roleNavItems.map((item) => {
             const isLocked = Boolean(item.enterpriseOnly && !hasEnterprisePlan);
             const className = `relative flex items-center border-l-2 py-2.5 text-sm transition-colors ${
               isLocked
@@ -113,8 +126,8 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
                 <button
                   key={item.path}
                   type="button"
-                  aria-label={`${item.name}, terkunci di paket UMKM. Buka pengaturan untuk upgrade ke Enterprise.`}
-                  onClick={() => navigate(`/dashboard/branch/${branchId}/settings?upgrade=1`)}
+                  aria-label={`${item.name}, terkunci di paket UMKM. ${employeeRole ? 'Hubungi pemilik bisnis untuk upgrade ke Enterprise.' : 'Buka pengaturan untuk upgrade ke Enterprise.'}`}
+                  onClick={() => { if (!employeeRole) navigate(`/dashboard/branch/${branchId}/settings?upgrade=1`); }}
                   className={className}
                 >
                   <span className="text-slate-400">{item.icon}</span>
@@ -125,8 +138,8 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
                     role="tooltip"
                     className="pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-56 rounded-lg bg-slate-900 px-3 py-2 text-left text-xs leading-5 text-white shadow-xl group-hover/locked:block group-focus/locked:block"
                   >
-                    <span className="block font-semibold">Upgrade ke Enterprise</span>
-                    <span className="block text-slate-300">Upgrade langganan untuk membuka fitur {item.name}.</span>
+                    <span className="block font-semibold">{employeeRole ? 'Fitur Enterprise terkunci' : 'Upgrade ke Enterprise'}</span>
+                    <span className="block text-slate-300">{employeeRole ? 'Hubungi pemilik bisnis untuk membuka fitur ini.' : `Upgrade langganan untuk membuka fitur ${item.name}.`}</span>
                   </span>
                 </button>
               );
@@ -180,10 +193,10 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
                   <button
                     key={item.path}
                     type="button"
-                    aria-label={`${item.name}, terkunci di paket UMKM. Buka pengaturan untuk upgrade ke Enterprise.`}
+                    aria-label={`${item.name}, terkunci di paket UMKM. ${employeeRole ? 'Hubungi pemilik bisnis untuk upgrade ke Enterprise.' : 'Buka pengaturan untuk upgrade ke Enterprise.'}`}
                     onClick={() => {
                       setIsMobileMenuOpen(false);
-                      navigate(`/dashboard/branch/${branchId}/settings?upgrade=1`);
+                      if (!employeeRole) navigate(`/dashboard/branch/${branchId}/settings?upgrade=1`);
                     }}
                     className={className}
                   >
@@ -195,8 +208,8 @@ export default function Sidebar({ branchId, plan, status }: { branchId: string; 
                       role="tooltip"
                       className="pointer-events-none absolute bottom-full left-0 z-50 mb-1 hidden w-56 rounded-lg bg-slate-900 px-3 py-2 text-left text-xs leading-5 text-white shadow-xl group-hover/locked:block group-focus/locked:block"
                     >
-                      <span className="block font-semibold">Upgrade ke Enterprise</span>
-                      <span className="block text-slate-300">Upgrade langganan untuk membuka fitur {item.name}.</span>
+                      <span className="block font-semibold">{employeeRole ? 'Fitur Enterprise terkunci' : 'Upgrade ke Enterprise'}</span>
+                      <span className="block text-slate-300">{employeeRole ? 'Hubungi pemilik bisnis untuk membuka fitur ini.' : `Upgrade langganan untuk membuka fitur ${item.name}.`}</span>
                     </span>
                   </button>
                 );

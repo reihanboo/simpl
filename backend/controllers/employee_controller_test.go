@@ -7,7 +7,65 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+func TestEmployeeRoleNormalizationAndValidation(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "Kasir", want: "Kasir"},
+		{input: "cashier", want: "Kasir"},
+		{input: "Staf Gudang", want: "Staf Gudang"},
+		{input: "warehouse_staff", want: "Staf Gudang"},
+		{input: "Manajer Toko", want: "Manajer Toko"},
+		{input: "Manager Toko", want: "Manajer Toko"},
+		{input: "manager", want: "Manajer Toko"},
+	}
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			input := employeeInput{Name: "Nadia", Email: "nadia@example.com", Phone: "081234567890", Role: test.input, Status: "Aktif"}
+			if err := input.normalizeAndValidate(); err != nil {
+				t.Fatalf("normalizeAndValidate() error = %v", err)
+			}
+			if input.Role != test.want {
+				t.Errorf("normalized role = %q, want %q", input.Role, test.want)
+			}
+		})
+	}
+
+	input := employeeInput{Name: "Nadia", Email: "nadia@example.com", Phone: "081234567890", Role: "Admin", Status: "Aktif"}
+	if err := input.normalizeAndValidate(); !errors.Is(err, errEmployeeRoleInvalid) {
+		t.Errorf("unsupported role error = %v, want %v", err, errEmployeeRoleInvalid)
+	}
+}
+
+func TestManagerCannotChangeOwnRoleOrPromoteAnotherManager(t *testing.T) {
+	managerID := uuid.New()
+	otherEmployeeID := uuid.New()
+	tests := []struct {
+		name        string
+		actorID     uuid.UUID
+		targetID    uuid.UUID
+		currentRole string
+		newRole     string
+		want        bool
+	}{
+		{name: "keep own manager role", actorID: managerID, targetID: managerID, currentRole: "Manajer Toko", newRole: "manager", want: true},
+		{name: "cannot demote self", actorID: managerID, targetID: managerID, currentRole: "Manajer Toko", newRole: "Kasir", want: false},
+		{name: "cannot promote another employee", actorID: managerID, targetID: otherEmployeeID, currentRole: "Kasir", newRole: "Manajer Toko", want: false},
+		{name: "can change another employee role", actorID: managerID, targetID: otherEmployeeID, currentRole: "Kasir", newRole: "Staf Gudang", want: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := employeeRoleChangeAllowed("manager", test.actorID, test.targetID, test.currentRole, test.newRole); got != test.want {
+				t.Errorf("employeeRoleChangeAllowed() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
 
 func TestEmployeeAttendanceStatusUsesShiftStart(t *testing.T) {
 	jakartaLocation := testTimezone(t, "Asia/Jakarta")

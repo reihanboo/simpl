@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useParams } from 'react-router-dom';
+import { normalizeEmployeeRole } from '../../../../utils/employee-role';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -29,6 +30,8 @@ interface EmployeeRecord {
   name: string;
   email: string;
   phone: string;
+  login_username?: string | null;
+  is_current_user?: boolean;
   role: string;
   status: EmployeeStatus;
   shift: string;
@@ -42,6 +45,8 @@ interface Employee {
   name: string;
   email: string;
   phone: string;
+  loginUsername: string | null;
+  isCurrentUser: boolean;
   role: string;
   status: EmployeeStatus;
   shift: string;
@@ -96,6 +101,8 @@ function mapEmployee(record: EmployeeRecord, colorIndex: number): Employee {
     name: record.name,
     email: record.email,
     phone: record.phone,
+    loginUsername: record.login_username ?? null,
+    isCurrentUser: record.is_current_user ?? false,
     role: record.role,
     status: record.status,
     shift: record.shift,
@@ -161,6 +168,7 @@ export default function EmployeesIndex() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
+  const [createCredentials, setCreateCredentials] = useState<{ username: string; temporaryPassword: string } | null>(null);
 
   useEffect(() => {
     if (!branchId) return;
@@ -199,6 +207,7 @@ export default function EmployeesIndex() {
         employee.name.toLocaleLowerCase('id-ID').includes(normalizedQuery) ||
         employee.email.toLocaleLowerCase('id-ID').includes(normalizedQuery) ||
         employee.phone.toLocaleLowerCase('id-ID').includes(normalizedQuery) ||
+        employee.loginUsername?.toLocaleLowerCase('id-ID').includes(normalizedQuery) ||
         employee.role.toLocaleLowerCase('id-ID').includes(normalizedQuery);
       const matchesStatus = statusFilter === 'Semua status' || employee.status === statusFilter;
       return matchesQuery && matchesStatus;
@@ -216,8 +225,12 @@ export default function EmployeesIndex() {
   const attendanceRate = scheduledEmployees.length
     ? Math.round((checkedInCount / scheduledEmployees.length) * 100)
     : 0;
+  const isEditingOwnManagerRole = Boolean(
+    editingEmployee?.isCurrentUser && normalizeEmployeeRole(editingEmployee.role) === 'manager'
+  );
 
   const openAddModal = () => {
+    setCreateCredentials(null);
     setEditingEmployee(null);
     setForm(emptyForm);
     setFormError('');
@@ -225,6 +238,7 @@ export default function EmployeesIndex() {
   };
 
   const openEditModal = (employee: Employee) => {
+    setCreateCredentials(null);
     setEditingEmployee(employee);
     setForm({
       name: employee.name,
@@ -270,12 +284,18 @@ export default function EmployeesIndex() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Gagal menyimpan data pegawai.');
 
+      const credentials = payload.credentials as { username?: unknown; temporary_password?: unknown } | undefined;
+      if (typeof credentials?.username === 'string' && typeof credentials.temporary_password === 'string') {
+        setCreateCredentials({ username: credentials.username, temporaryPassword: credentials.temporary_password });
+      }
+
       if (editingEmployee) {
         const index = employees.findIndex((employee) => employee.id === editingEmployee.id);
         const savedEmployee = mapEmployee(payload.employee as EmployeeRecord, Math.max(index, 0));
         setEmployees((current) => current.map((employee) => employee.id === editingEmployee.id ? savedEmployee : employee));
       } else {
         setEmployees((current) => [...current, mapEmployee(payload.employee as EmployeeRecord, current.length)]);
+        if (!credentials) setCreateCredentials(null);
       }
       setIsModalOpen(false);
       setEditingEmployee(null);
@@ -329,6 +349,30 @@ export default function EmployeesIndex() {
       </header>
 
       {pageError && <p role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{pageError}</p>}
+
+      {createCredentials && (
+        <section aria-label="Kredensial login pegawai" className="border border-emerald-300 bg-emerald-50 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-emerald-950">Akun login pegawai berhasil dibuat</h2>
+              <p className="mt-1 text-sm leading-relaxed text-emerald-900">Kredensial ini hanya ditampilkan sekarang. Bagikan langsung kepada pegawai melalui saluran yang aman.</p>
+            </div>
+            <button type="button" onClick={() => setCreateCredentials(null)} className="shrink-0 p-1 text-emerald-800 hover:bg-emerald-100" aria-label="Tutup kredensial login">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="border border-emerald-200 bg-white px-3 py-2.5">
+              <dt className="text-xs font-medium text-slate-500">Username</dt>
+              <dd className="mt-1 break-all font-mono text-sm text-slate-900">{createCredentials.username}</dd>
+            </div>
+            <div className="border border-emerald-200 bg-white px-3 py-2.5">
+              <dt className="text-xs font-medium text-slate-500">Kata sandi awal (ditampilkan sekali)</dt>
+              <dd className="mt-1 break-all font-mono text-sm text-slate-900">{createCredentials.temporaryPassword}</dd>
+            </div>
+          </dl>
+        </section>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total pegawai" value={String(employees.length)} detail="Pegawai terdaftar" icon={<Users className="h-5 w-5" />} tone="bg-sky-50 text-sky-700" />
@@ -396,6 +440,7 @@ export default function EmployeesIndex() {
                           <div className="mt-1 space-y-0.5">
                             <p className="flex items-center gap-1 truncate text-xs text-slate-500"><Mail className="h-3 w-3 shrink-0" />{employee.email}</p>
                             <p className="flex items-center gap-1 truncate text-xs text-slate-500"><Phone className="h-3 w-3 shrink-0" />{employee.phone}</p>
+                            <p className="truncate text-xs text-slate-500">Login: {employee.loginUsername || 'Belum tersedia'}</p>
                           </div>
                         </div>
                       </div>
@@ -567,9 +612,14 @@ export default function EmployeesIndex() {
                   <input required type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="0812-3456-7890" className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">Peran
-                  <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20">
-                    <option>Kasir</option><option>Staf Gudang</option><option>Manajer Toko</option><option>Admin</option>
+                  <select disabled={isEditingOwnManagerRole} value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500">
+                    <option>Kasir</option><option>Staf Gudang</option><option>Manajer Toko</option>
                   </select>
+                  <p className="mt-1 text-xs font-normal text-slate-500">
+                    {isEditingOwnManagerRole
+                      ? 'Peran Manajer Toko pada akun Anda tidak dapat diubah sendiri.'
+                      : 'Kasir mengakses POS, Staf Gudang mengakses Inventori & Stok, dan Manajer Toko mengakses EMS, CRS, serta Presensi.'}
+                  </p>
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">Jadwal hari ini
                   <input value={form.shift} onChange={(event) => setForm((current) => ({ ...current, shift: event.target.value }))} placeholder="08.00 – 16.00 (kosongkan jika tidak dijadwalkan)" className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/resend/resend-go/v2"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type RegisterInput struct {
@@ -295,17 +297,81 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	var employee models.Employee
+	employeeAccount := false
+	if err := config.DB.Unscoped().Where("user_id = ?", user.ID).First(&employee).Error; err == nil {
+		employeeAccount = true
+		if employee.DeletedAt.Valid || employee.Status != "Aktif" {
+			utils.RespondError(c, http.StatusForbidden, "Akun pegawai tidak aktif. Hubungi pemilik bisnis.")
+			return
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi akses akun.")
+		return
+	}
+
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Sesi masuk tidak dapat dibuat. Silakan coba lagi.")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"token":                    token,
 		"user_id":                  user.ID,
 		"requires_password_change": user.RequiresPasswordChange,
-	})
+	}
+	if employeeAccount {
+		response["employee"] = gin.H{
+			"branch_id": employee.BranchID,
+			"role":      employeeLoginRole(employee.Role),
+		}
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+type ChangePasswordInput struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+}
+
+func ChangePassword(c *gin.Context) {
+	userIDValue, exists := c.Get("userID")
+	userID, valid := userIDValue.(uuid.UUID)
+	if !exists || !valid {
+		utils.RespondError(c, http.StatusUnauthorized, "Sesi Anda tidak valid. Silakan masuk kembali.")
+		return
+	}
+	var input ChangePasswordInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondBindError(c, err)
+		return
+	}
+	var user models.User
+	if err := config.DB.First(&user, "id = ?", userID).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Akun tidak ditemukan.")
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.CurrentPassword)); err != nil {
+		utils.RespondError(c, http.StatusUnauthorized, "Kata sandi saat ini tidak sesuai.")
+		return
+	}
+	if input.CurrentPassword == input.NewPassword {
+		utils.RespondError(c, http.StatusBadRequest, "Kata sandi baru harus berbeda dari kata sandi awal.")
+		return
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(input.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi baru tidak dapat diproses.")
+		return
+	}
+	user.PasswordHash = string(passwordHash)
+	user.RequiresPasswordChange = false
+	if err := config.DB.Save(&user).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi belum berhasil diperbarui.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Kata sandi berhasil diperbarui."})
 }
 
 type ForgotPasswordInput struct {

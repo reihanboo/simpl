@@ -55,6 +55,7 @@ func main() {
 			auth.POST("/reset-password", controllers.ResetPassword)
 			auth.GET("/me", middlewares.AuthMiddleware(), controllers.Me)
 			auth.PUT("/me", middlewares.AuthMiddleware(), controllers.UpdateProfile)
+			auth.POST("/change-password", middlewares.AuthMiddleware(), controllers.ChangePassword)
 		}
 
 		// Midtrans server-to-server notification. Unauthenticated: Midtrans calls
@@ -62,7 +63,7 @@ func main() {
 		api.POST("/midtrans/notification", controllers.MidtransNotification)
 
 		business := api.Group("/business")
-		business.Use(middlewares.AuthMiddleware())
+		business.Use(middlewares.AuthMiddleware(), middlewares.EmployeeBusinessAccessMiddleware())
 		{
 			business.POST("", controllers.CreateBusiness)
 			business.GET("", controllers.GetBusinesses)
@@ -70,6 +71,7 @@ func main() {
 			business.POST("/invitations/:id/accept", controllers.AcceptBusinessInvitation)
 			business.POST("/invitations/:id/decline", controllers.DeclineBusinessInvitation)
 			business.GET("/:id/members", controllers.ListBusinessMembers)
+			business.DELETE("/:id/members/:user_id", controllers.RemoveBusinessMember)
 			business.GET("/:id/invitations", controllers.ListBusinessInvitations)
 			business.POST("/:id/invitations", controllers.InviteBusinessMember)
 			business.DELETE("/:id/invitations/:invite_id", controllers.RevokeBusinessInvitation)
@@ -79,7 +81,7 @@ func main() {
 		}
 
 		branch := api.Group("/branches")
-		branch.Use(middlewares.AuthMiddleware())
+		branch.Use(middlewares.AuthMiddleware(), middlewares.EmployeeBranchAccessMiddleware())
 		{
 			branch.POST("", controllers.CreateBranch)
 			branch.GET("", controllers.GetBranches)

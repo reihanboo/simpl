@@ -68,6 +68,8 @@ export default function BranchSettings() {
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [memberNotice, setMemberNotice] = useState('');
+  const [memberToRemove, setMemberToRemove] = useState<BusinessMember | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   const currentPlan = activeOrg?.plan?.trim() || 'Tidak diketahui';
   const isEnterpriseActive = currentPlan.toLowerCase().startsWith('enterprise') && activeOrg?.status?.toLowerCase() === 'active';
@@ -178,6 +180,29 @@ export default function BranchSettings() {
       setMemberNotice('Undangan telah dicabut.');
     } catch (error) {
       setMemberError(error instanceof Error ? error.message : 'Undangan belum dapat dicabut.');
+    }
+  };
+
+  const removeCoOwner = async () => {
+    if (!activeOrg || !memberToRemove) return;
+    setIsRemovingMember(true);
+    setMemberError('');
+    setMemberNotice('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(`/api/business/${activeOrg.id}/members/${memberToRemove.user_id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Co-owner belum dapat dihapus.');
+      setMembers((current) => current.filter((member) => member.user_id !== memberToRemove.user_id));
+      setMemberNotice(`${memberToRemove.username} tidak lagi memiliki akses ke bisnis ini.`);
+      setMemberToRemove(null);
+    } catch (error) {
+      setMemberError(error instanceof Error ? error.message : 'Co-owner belum dapat dihapus.');
+    } finally {
+      setIsRemovingMember(false);
     }
   };
 
@@ -433,7 +458,10 @@ export default function BranchSettings() {
                 <p className="truncate text-sm font-semibold text-slate-900">{member.username}</p>
                 <p className="truncate text-xs text-slate-500">{member.email}</p>
               </div>
-              <span className="shrink-0 border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{member.is_owner ? 'Pemilik' : 'Co-owner'}</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">{member.is_owner ? 'Pemilik' : 'Co-owner'}</span>
+                {isBusinessOwner && !member.is_owner && <button type="button" onClick={() => { setMemberError(''); setMemberToRemove(member); }} aria-label={`Hapus co-owner ${member.username}`} className="inline-flex items-center gap-1.5 border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /> Hapus</button>}
+              </div>
             </div>
           ))}
           {!isLoadingMembers && members.length === 0 && <p className="p-5 text-sm text-slate-500">Belum ada pemilik bisnis yang terdaftar.</p>}
@@ -459,6 +487,23 @@ export default function BranchSettings() {
           </div>
         )}
       </section>
+
+      {memberToRemove && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !isRemovingMember) setMemberToRemove(null); }}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="remove-co-owner-title" className="w-full max-w-md border border-slate-300 bg-white p-6 shadow-2xl">
+            <h2 id="remove-co-owner-title" className="text-lg font-bold text-slate-900">Hapus co-owner?</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600"><strong>{memberToRemove.username}</strong> tidak dapat lagi mengakses atau mengelola bisnis ini. Akses akan dicabut segera.</p>
+            {memberError && <p role="alert" className="mt-4 border border-red-200 bg-red-50 p-3 text-sm text-red-700">{memberError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" disabled={isRemovingMember} onClick={() => setMemberToRemove(null)} className="border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Batal</button>
+              <button type="button" disabled={isRemovingMember} onClick={() => void removeCoOwner()} className="inline-flex items-center gap-2 bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60">
+                {isRemovingMember && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                Hapus akses
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button type="button" onClick={() => navigate(`/dashboard/branch/${branchId}`)} className="text-sm font-medium text-slate-600 hover:text-slate-900">
         Kembali ke dashboard
