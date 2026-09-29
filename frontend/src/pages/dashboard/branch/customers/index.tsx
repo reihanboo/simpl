@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 
 import {
@@ -204,6 +205,7 @@ export default function CustomersIndex() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [actionMenuCustomerId, setActionMenuCustomerId] = useState<string | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detail, setDetail] = useState<CustomerDetailResponse | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -227,6 +229,39 @@ export default function CustomersIndex() {
   const [activeSection, setActiveSection] = useState<'customers' | 'loyalty'>('customers');
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  useEffect(() => {
+    if (!actionMenuCustomerId) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-customer-action-menu], [data-customer-action-trigger]')) return;
+      setActionMenuCustomerId(null);
+      setActionMenuPosition(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActionMenuCustomerId(null);
+        setActionMenuPosition(null);
+      }
+    };
+    const closeOnScroll = () => {
+      setActionMenuCustomerId(null);
+      setActionMenuPosition(null);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('scroll', closeOnScroll, true);
+    window.addEventListener('resize', closeOnScroll);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('scroll', closeOnScroll, true);
+      window.removeEventListener('resize', closeOnScroll);
+    };
+  }, [actionMenuCustomerId]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -367,6 +402,8 @@ export default function CustomersIndex() {
   };
 
   const openEditModal = (customer: Customer) => {
+    setActionMenuCustomerId(null);
+    setActionMenuPosition(null);
     setEditingCustomer(customer);
     setName(customer.name);
     setEmail(customer.email);
@@ -714,13 +751,32 @@ export default function CustomersIndex() {
                           type="button"
                           aria-label={`Tindakan lainnya untuk ${customer.name}`}
                           aria-expanded={actionMenuCustomerId === customer.id}
-                          onClick={() => setActionMenuCustomerId((id) => id === customer.id ? null : customer.id)}
+                          data-customer-action-trigger
+                          onClick={(event) => {
+                            if (actionMenuCustomerId === customer.id) {
+                              setActionMenuCustomerId(null);
+                              setActionMenuPosition(null);
+                              return;
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            const menuHeight = 132;
+                            const opensAbove = rect.bottom + menuHeight > window.innerHeight - 8;
+                            setActionMenuPosition({
+                              top: opensAbove ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4,
+                              right: Math.max(8, window.innerWidth - rect.right),
+                            });
+                            setActionMenuCustomerId(customer.id);
+                          }}
                           className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
-                        {actionMenuCustomerId === customer.id && (
-                          <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg">
+                        {actionMenuCustomerId === customer.id && actionMenuPosition && createPortal(
+                          <div
+                            data-customer-action-menu
+                            style={{ top: actionMenuPosition.top, right: actionMenuPosition.right }}
+                            className="fixed z-[100] w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg"
+                          >
                             <button type="button" onClick={() => void handleViewCustomer(customer)} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
                               <Eye className="h-4 w-4" /> Lihat detail
                             </button>
@@ -729,12 +785,18 @@ export default function CustomersIndex() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => { setActionMenuCustomerId(null); setArchiveError(''); setCustomerToArchive(customer); }}
+                              onClick={() => {
+                                setActionMenuCustomerId(null);
+                                setActionMenuPosition(null);
+                                setArchiveError('');
+                                setCustomerToArchive(customer);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" /> Arsipkan
                             </button>
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </td>
