@@ -28,14 +28,8 @@ services:
       - DB_PORT=${DB_PORT:-5432}
       - JWT_SECRET=${JWT_SECRET:-simpl-local-development-secret-change-before-deploy}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - RESEND_API_KEY=${RESEND_API_KEY:-}
-      - MIDTRANS_SERVER_KEY=${MIDTRANS_SERVER_KEY:-}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - DEEPSEEK_API=${DEEPSEEK_API:-}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
-      - AI_DB_USER=${AI_DB_USER:-}
-      - AI_DB_PASSWORD=${AI_DB_PASSWORD:-}
     volumes:
       - ./backend:/app
     depends_on:

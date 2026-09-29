@@ -541,7 +541,7 @@ export default function BranchDashboard() {
           <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-slate-600">
               <Info className="h-3.5 w-3.5 text-slate-500" />
-              Terhubung ke DeepSeek melalui MCP · Akses baca-saja ke data cabang
+              Sistem AI dapat menghasilkan fakta yang salah, Selalu verifikasi jawaban ABAI sebelum mengambil keputusan bisnis.
             </div>
           </div>
         </aside>
