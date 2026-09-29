@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 
 import {
@@ -204,6 +205,7 @@ export default function CustomersIndex() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [actionMenuCustomerId, setActionMenuCustomerId] = useState<string | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detail, setDetail] = useState<CustomerDetailResponse | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -227,6 +229,39 @@ export default function CustomersIndex() {
   const [activeSection, setActiveSection] = useState<'customers' | 'loyalty'>('customers');
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  useEffect(() => {
+    if (!actionMenuCustomerId) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-customer-action-menu], [data-customer-action-trigger]')) return;
+      setActionMenuCustomerId(null);
+      setActionMenuPosition(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActionMenuCustomerId(null);
+        setActionMenuPosition(null);
+      }
+    };
+    const closeOnScroll = () => {
+      setActionMenuCustomerId(null);
+      setActionMenuPosition(null);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('scroll', closeOnScroll, true);
+    window.addEventListener('resize', closeOnScroll);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('scroll', closeOnScroll, true);
+      window.removeEventListener('resize', closeOnScroll);
+    };
+  }, [actionMenuCustomerId]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -367,6 +402,8 @@ export default function CustomersIndex() {
   };
 
   const openEditModal = (customer: Customer) => {
+    setActionMenuCustomerId(null);
+    setActionMenuPosition(null);
     setEditingCustomer(customer);
     setName(customer.name);
     setEmail(customer.email);
@@ -714,13 +751,32 @@ export default function CustomersIndex() {
                           type="button"
                           aria-label={`Tindakan lainnya untuk ${customer.name}`}
                           aria-expanded={actionMenuCustomerId === customer.id}
-                          onClick={() => setActionMenuCustomerId((id) => id === customer.id ? null : customer.id)}
+                          data-customer-action-trigger
+                          onClick={(event) => {
+                            if (actionMenuCustomerId === customer.id) {
+                              setActionMenuCustomerId(null);
+                              setActionMenuPosition(null);
+                              return;
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            const menuHeight = 132;
+                            const opensAbove = rect.bottom + menuHeight > window.innerHeight - 8;
+                            setActionMenuPosition({
+                              top: opensAbove ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4,
+                              right: Math.max(8, window.innerWidth - rect.right),
+                            });
+                            setActionMenuCustomerId(customer.id);
+                          }}
                           className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
-                        {actionMenuCustomerId === customer.id && (
-                          <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg">
+                        {actionMenuCustomerId === customer.id && actionMenuPosition && createPortal(
+                          <div
+                            data-customer-action-menu
+                            style={{ top: actionMenuPosition.top, right: actionMenuPosition.right }}
+                            className="fixed z-100 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg"
+                          >
                             <button type="button" onClick={() => void handleViewCustomer(customer)} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
                               <Eye className="h-4 w-4" /> Lihat detail
                             </button>
@@ -729,12 +785,18 @@ export default function CustomersIndex() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => { setActionMenuCustomerId(null); setArchiveError(''); setCustomerToArchive(customer); }}
+                              onClick={() => {
+                                setActionMenuCustomerId(null);
+                                setActionMenuPosition(null);
+                                setArchiveError('');
+                                setCustomerToArchive(customer);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4" /> Arsipkan
                             </button>
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </td>
@@ -849,34 +911,34 @@ export default function CustomersIndex() {
 
       {isDetailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsDetailOpen(false)} />
+          <div className="absolute inset-0 bg-slate-950/40" onClick={() => setIsDetailOpen(false)} />
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="customer-detail-title"
-            className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+            className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 p-6">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-300 p-5">
               <div>
-                <h2 id="customer-detail-title" className="text-xl font-bold text-slate-900">{detail?.customer.name || 'Detail pelanggan'}</h2>
+                <h2 id="customer-detail-title" className="text-lg font-semibold text-slate-900">{detail?.customer.name || 'Detail pelanggan'}</h2>
                 <p className="mt-1 text-sm text-slate-500">Profil dan riwayat pembelian pelanggan</p>
               </div>
-              <button type="button" onClick={() => setIsDetailOpen(false)} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Tutup detail">
+              <button type="button" onClick={() => setIsDetailOpen(false)} className="inline-flex h-10 w-10 items-center justify-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#21AC3A]" aria-label="Tutup detail">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="overflow-y-auto p-6">
+            <div className="overflow-y-auto p-4 sm:p-5">
               {isDetailLoading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
                   <Loader2 className="h-5 w-5 animate-spin text-[#21AC3A]" /> Memuat detail pelanggan...
                 </div>
               ) : detailError ? (
-                <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detailError}</div>
+                <div role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detailError}</div>
               ) : detail ? (
                 <>
-                  <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                  <section className="grid gap-4 border border-slate-300 bg-slate-50 p-4 sm:grid-cols-2">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor telepon</p>
                       <p className="mt-1 text-sm font-medium text-slate-900">{detail.customer.phone || '—'}</p>
@@ -905,7 +967,7 @@ export default function CustomersIndex() {
                   </section>
 
                   {detail.customer.membership_active && (
-                    <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                    <section className="mt-6 border border-amber-200 bg-amber-50/60 p-4">
                       <div className="flex items-center gap-2 font-semibold text-slate-900"><Coins className="h-4 w-4 text-amber-600" /> Kelola poin loyalitas</div>
                       <p className="mt-1 text-xs text-slate-500">Koreksi saldo wajib disertai alasan. Penukaran hanya bisa dilakukan lewat hadiah aktif dengan saldo poin yang mencukupi.</p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.4fr_auto]">
@@ -960,11 +1022,11 @@ export default function CustomersIndex() {
                       <span className="text-sm text-slate-500">{detail.purchase_history.length.toLocaleString('id-ID')} transaksi</span>
                     </div>
                     {detail.purchase_history.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">Belum ada riwayat pembelian.</div>
+                      <div className="border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">Belum ada riwayat pembelian.</div>
                     ) : (
                       <div className="space-y-3">
                         {detail.purchase_history.map((purchase) => (
-                          <article key={purchase.id} className="rounded-xl border border-slate-200 p-4">
+                          <article key={purchase.id} className="border border-slate-300 p-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <p className="font-semibold text-slate-900">{purchase.order_number}</p>
@@ -994,8 +1056,8 @@ export default function CustomersIndex() {
                 </>
               ) : null}
             </div>
-            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
-              <button type="button" onClick={() => setIsDetailOpen(false)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Tutup</button>
+            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-slate-50 p-4">
+              <button type="button" onClick={() => setIsDetailOpen(false)} className="min-h-10 border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100">Tutup</button>
               {detail && !isDetailLoading && (
                 <button
                   type="button"
@@ -1004,7 +1066,7 @@ export default function CustomersIndex() {
                     setIsDetailOpen(false);
                     openEditModal({ id: customer.id, name: customer.name, email: customer.email || '', phone: customer.phone || '', orders: customer.orders, lifetimeValue: customer.lifetime_value_idr, lastVisit: customer.last_visit, type: customer.type, loyaltyPoints: customer.loyalty_points, membershipActive: customer.membership_active });
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#21AC3A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d9732]"
+                  className="inline-flex min-h-10 items-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732]"
                 >
                   <Pencil className="h-4 w-4" /> Ubah data
                 </button>
