@@ -14,5 +14,6 @@ type Branch struct {
 	Latitude        *float64  `gorm:"type:double precision" json:"latitude"`
 	Longitude       *float64  `gorm:"type:double precision" json:"longitude"`
 	GeofenceRadiusM int       `gorm:"not null;default:100" json:"geofence_radius_m"`
+	Timezone        string    `gorm:"type:varchar(64);not null;default:'Asia/Jakarta'" json:"timezone"`
 	CreatedAt       time.Time `json:"created_at"`
 }

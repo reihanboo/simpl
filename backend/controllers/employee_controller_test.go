@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"backend/models"
+	"backend/utils"
 	"errors"
 	"math"
 	"testing"
@@ -9,6 +10,7 @@ import (
 )
 
 func TestEmployeeAttendanceStatusUsesShiftStart(t *testing.T) {
+	jakartaLocation := testTimezone(t, "Asia/Jakarta")
 	shiftStart := time.Date(2026, 5, 12, 8, 0, 0, 0, jakartaLocation)
 	tests := []struct {
 		name    string
@@ -22,7 +24,7 @@ func TestEmployeeAttendanceStatusUsesShiftStart(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := employeeAttendanceStatus("08.00 – 16.00", test.clockIn); got != test.want {
+			if got := employeeAttendanceStatus("08.00 – 16.00", test.clockIn, jakartaLocation); got != test.want {
 				t.Errorf("employeeAttendanceStatus() = %q, want %q", got, test.want)
 			}
 		})
@@ -70,11 +72,65 @@ func TestValidateAttendanceLocationRequiresConfiguredBranchAndAccurateGPS(t *tes
 	}
 }
 
-func TestJakartaDateUsesBusinessTimezone(t *testing.T) {
-	value := time.Date(2026, 5, 12, 18, 0, 0, 0, time.UTC)
-	got := jakartaDate(value)
-	want := time.Date(2026, 5, 13, 0, 0, 0, 0, jakartaLocation)
-	if !got.Equal(want) {
-		t.Errorf("jakartaDate() = %s, want %s", got, want)
+func TestAttendanceDateUsesBranchTimezone(t *testing.T) {
+	value := time.Date(2026, 5, 12, 16, 30, 0, 0, time.UTC)
+	jakarta := testTimezone(t, "Asia/Jakarta")
+	makassar := testTimezone(t, "Asia/Makassar")
+
+	if got, want := attendanceDateAt(value, jakarta), "2026-05-12"; got != want {
+		t.Errorf("Jakarta attendance date = %q, want %q", got, want)
+	}
+	if got, want := attendanceDateAt(value, makassar), "2026-05-13"; got != want {
+		t.Errorf("Makassar attendance date = %q, want %q", got, want)
+	}
+}
+
+func TestEmployeeAttendanceStatusUsesBranchTimezone(t *testing.T) {
+	clockIn := time.Date(2026, 5, 12, 1, 1, 0, 0, time.UTC)
+	jakarta := testTimezone(t, "Asia/Jakarta")
+	makassar := testTimezone(t, "Asia/Makassar")
+
+	if got := employeeAttendanceStatus("08:00 – 16:00", clockIn, jakarta); got != "Terlambat" {
+		t.Errorf("Jakarta attendance status = %q, want Terlambat", got)
+	}
+	if got := employeeAttendanceStatus("09:00 – 17:00", clockIn, makassar); got != "Terlambat" {
+		t.Errorf("Makassar attendance status = %q, want Terlambat", got)
+	}
+}
+
+func testTimezone(t *testing.T, name string) *time.Location {
+	t.Helper()
+	location, err := utils.LoadTimezone(name)
+	if err != nil {
+		t.Fatalf("LoadTimezone(%q): %v", name, err)
+	}
+	return location
+}
+
+func TestApplyBranchTimezoneDefaultsAndValidates(t *testing.T) {
+	var created models.Branch
+	if err := applyBranchTimezone(&created, "", true); err != nil {
+		t.Fatalf("applyBranchTimezone() error = %v", err)
+	}
+	if created.Timezone != utils.DefaultTimezone {
+		t.Errorf("new branch timezone = %q, want %q", created.Timezone, utils.DefaultTimezone)
+	}
+
+	existing := models.Branch{Timezone: "Asia/Makassar"}
+	if err := applyBranchTimezone(&existing, "", false); err != nil {
+		t.Fatalf("applyBranchTimezone() error = %v", err)
+	}
+	if existing.Timezone != "Asia/Makassar" {
+		t.Errorf("omitted timezone changed existing timezone to %q", existing.Timezone)
+	}
+
+	if err := applyBranchTimezone(&existing, "Not/AZone", false); err == nil {
+		t.Fatal("expected invalid IANA timezone to be rejected")
+	}
+	if err := applyBranchTimezone(&existing, "Asia/Jayapura", false); err != nil {
+		t.Fatalf("valid timezone rejected: %v", err)
+	}
+	if existing.Timezone != "Asia/Jayapura" {
+		t.Errorf("updated branch timezone = %q, want Asia/Jayapura", existing.Timezone)
 	}
 }

@@ -14,6 +14,7 @@ export default function NewBusinessPage() {
   const navigate = useNavigate();
   const [newBusinessName, setNewBusinessName] = useState('');
   const [address, setAddress] = useState('');
+  const [businessTimezone, setBusinessTimezone] = useState('Asia/Jakarta');
   const [mapPosition, setMapPosition] = useState<[number, number] | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([-6.2088, 106.8456]);
   const [newBusinessPlan, setNewBusinessPlan] = useState('UMKM');
@@ -82,6 +83,7 @@ export default function NewBusinessPage() {
         body: JSON.stringify({
           name: newBusinessName,
           address: address,
+          timezone: businessTimezone,
           plan: newBusinessPlan,
           duration_months: durationMonths
         })
@@ -250,6 +252,20 @@ export default function NewBusinessPage() {
                       <span>Gunakan lokasi saya</span>
                     </button>
                   </div>
+                  <label htmlFor="business-timezone" className="mt-4 block text-sm font-medium text-slate-800">
+                    Zona waktu cabang utama
+                    <select
+                      id="business-timezone"
+                      value={businessTimezone}
+                      onChange={(event) => setBusinessTimezone(event.target.value)}
+                      className="mt-1.5 block w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-[#21AC3A] focus:outline-none focus:ring-1 focus:ring-[#21AC3A]"
+                    >
+                      <option value="Asia/Jakarta">WIB — Asia/Jakarta (UTC+7)</option>
+                      <option value="Asia/Makassar">WITA — Asia/Makassar (UTC+8)</option>
+                      <option value="Asia/Jayapura">WIT — Asia/Jayapura (UTC+9)</option>
+                    </select>
+                    <span className="mt-1.5 block text-xs font-normal text-slate-500">Menentukan hari dan jam lokal yang digunakan untuk presensi cabang.</span>
+                  </label>
                   <div className="relative z-0 mt-4 h-56 w-full overflow-hidden border border-slate-200 sm:h-64">
                     <Map height={256} center={mapCenter} defaultZoom={13} onClick={handleMapClick}>
                       {mapPosition && <Marker width={40} anchor={mapPosition} />}

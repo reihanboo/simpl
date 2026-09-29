@@ -15,6 +15,7 @@ import {
   Delete,
   Check,
   Download,
+  Pause,
   RefreshCw,
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
@@ -52,6 +53,13 @@ interface Customer {
   email: string;
 }
 
+interface HeldTransaction {
+  id: string;
+  heldAt: string;
+  items: CartItem[];
+  customer: Customer | null;
+}
+
 interface Order {
   id: string;
   order_number: string;
@@ -81,11 +89,39 @@ const localDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const createHeldTransaction = (items: CartItem[], customer: Customer | null): HeldTransaction => {
+  const heldAt = new Date().toISOString();
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    heldAt,
+    items,
+    customer,
+  };
+};
+
+const readHeldTransactions = (branchId?: string): HeldTransaction[] => {
+  if (!branchId) return [];
+  try {
+    const stored = localStorage.getItem(`pos-held-transactions-${branchId}`);
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.filter((transaction): transaction is HeldTransaction =>
+        Boolean(transaction && typeof transaction.id === 'string' && Array.isArray(transaction.items)),
+      )
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 export default function BranchPOS() {
   const { id: branchId } = useParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [heldTransactions, setHeldTransactions] = useState<HeldTransaction[]>(() => readHeldTransactions(branchId));
+  const [isHeldTransactionsOpen, setIsHeldTransactionsOpen] = useState(false);
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
@@ -100,6 +136,12 @@ export default function BranchPOS() {
   const [customerQuery, setCustomerQuery] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [createCustomerError, setCreateCustomerError] = useState('');
 
   const fetchOrders = useCallback(async () => {
     if (!branchId) return;
@@ -127,6 +169,15 @@ export default function BranchPOS() {
   }, [fetchOrders]);
 
   useEffect(() => {
+    if (!branchId) return;
+    try {
+      localStorage.setItem(`pos-held-transactions-${branchId}`, JSON.stringify(heldTransactions));
+    } catch (error) {
+      console.warn('Failed to save held transactions', error);
+    }
+  }, [branchId, heldTransactions]);
+
+  useEffect(() => {
     if (!isCustomerModalOpen || !branchId) return;
     const controller = new AbortController();
     const fetchCustomers = async () => {
@@ -151,6 +202,50 @@ export default function BranchPOS() {
     void fetchCustomers();
     return () => controller.abort();
   }, [branchId, customerQuery, isCustomerModalOpen]);
+
+  const handleCreateCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!branchId || !newCustomerName.trim()) return;
+
+    setIsSavingCustomer(true);
+    setCreateCustomerError('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(`/api/branches/${branchId}/customers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newCustomerName.trim(),
+          phone: newCustomerPhone.trim(),
+          email: newCustomerEmail.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Failed to add customer');
+
+      const customer: Customer = {
+        id: payload.customer.id,
+        name: payload.customer.name,
+        phone: payload.customer.phone || '',
+        email: payload.customer.email || '',
+      };
+      setCustomers((current) => [customer, ...current.filter((item) => item.id !== customer.id)]);
+      setSelectedCustomer(customer);
+      setIsCustomerModalOpen(false);
+      setIsCreatingCustomer(false);
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setNewCustomerEmail('');
+      toast.success('Customer added and selected for this sale.');
+    } catch (error) {
+      setCreateCustomerError(error instanceof Error ? error.message : 'Failed to add customer');
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -210,12 +305,36 @@ export default function BranchPOS() {
   const totalToday = orders.reduce((sum, order) => sum + order.total_amount_idr, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
-  const startNewTransaction = () => {
-    if (cart.length > 0 && !window.confirm('Clear the current sale and start a new transaction?')) return;
+  const holdCurrentTransaction = () => {
+    if (cart.length === 0) return;
+    const heldTransaction = createHeldTransaction(cart, selectedCustomer);
+    setHeldTransactions((current) => [heldTransaction, ...current]);
     setCart([]);
     setSelectedCustomer(null);
     setSearchQuery('');
     setAmountPaid('');
+    toast.success('Transaction held.');
+  };
+
+  const handleResumeHeldTransaction = (transaction: HeldTransaction) => {
+    if (cart.length > 0 && !window.confirm('Hold the current sale and resume this transaction?')) return;
+
+    if (cart.length > 0) {
+      const currentTransaction = createHeldTransaction(cart, selectedCustomer);
+      setHeldTransactions((current) => [
+        currentTransaction,
+        ...current.filter((item) => item.id !== transaction.id),
+      ]);
+    } else {
+      setHeldTransactions((current) => current.filter((item) => item.id !== transaction.id));
+    }
+
+    setCart(transaction.items);
+    setSelectedCustomer(transaction.customer);
+    setSearchQuery('');
+    setAmountPaid('');
+    setIsHeldTransactionsOpen(false);
+    toast.success('Held transaction resumed.');
   };
 
   const exportTransactionLog = () => {
@@ -293,7 +412,7 @@ export default function BranchPOS() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setIsCustomerModalOpen(true)}
+            onClick={() => { setIsCreatingCustomer(false); setIsCustomerModalOpen(true); }}
             className={`flex items-center gap-2 border px-3 py-2 text-sm font-semibold transition-colors ${selectedCustomer ? 'border-[#21AC3A] bg-green-50 text-green-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
           >
             <User className="h-4 w-4" />
@@ -301,11 +420,19 @@ export default function BranchPOS() {
           </button>
           <button
             type="button"
-            onClick={startNewTransaction}
-            className="flex items-center gap-2 bg-[#21AC3A] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#1d9732]"
+            onClick={holdCurrentTransaction}
+            disabled={cart.length === 0}
+            className="flex items-center gap-2 bg-[#21AC3A] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Plus className="h-4 w-4" />
-            Hold Transaction
+            <Pause className="h-4 w-4" />
+            Hold transaction
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsHeldTransactionsOpen(true)}
+            className="border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Held ({heldTransactions.length})
           </button>
         </div>
       </div>
@@ -503,7 +630,7 @@ export default function BranchPOS() {
             </button>
             <button
               type="button"
-              onClick={() => setCart([])}
+              onClick={() => { setCart([]); setSelectedCustomer(null); setAmountPaid(''); }}
               disabled={cart.length === 0}
               className="w-full border border-slate-300 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -519,7 +646,16 @@ export default function BranchPOS() {
           <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="relative flex max-h-[80vh] w-full max-w-lg flex-col border border-slate-300 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div><h2 className="text-lg font-bold text-slate-900">Select customer</h2><p className="text-sm text-slate-500">Optional for this transaction</p></div>
-              <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsCreatingCustomer((creating) => !creating); setCreateCustomerError(''); }}
+                  className="inline-flex items-center gap-1.5 border border-[#21AC3A] px-3 py-2 text-sm font-semibold text-[#16852A] hover:bg-green-50"
+                >
+                  <Plus className="h-4 w-4" /> Add customer
+                </button>
+                <button type="button" onClick={() => setIsCustomerModalOpen(false)} aria-label="Close customer selection" className="p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              </div>
             </div>
             <div className="border-b border-slate-200 p-4">
               <div className="relative">
@@ -527,7 +663,61 @@ export default function BranchPOS() {
                 <input autoFocus value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} placeholder="Search name, phone, or email" className="w-full border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#21AC3A]" />
               </div>
             </div>
-            <div className="overflow-y-auto">
+            {isCreatingCustomer && (
+              <form onSubmit={handleCreateCustomer} className="space-y-3 border-b border-slate-200 bg-slate-50 p-4">
+                <label className="block text-sm font-medium text-slate-700">
+                  Name <span className="text-red-600">*</span>
+                  <input
+                    autoFocus
+                    required
+                    maxLength={255}
+                    value={newCustomerName}
+                    onChange={(event) => setNewCustomerName(event.target.value)}
+                    placeholder="Customer name"
+                    className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#21AC3A]"
+                  />
+                </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Phone
+                    <input
+                      type="tel"
+                      maxLength={20}
+                      value={newCustomerPhone}
+                      onChange={(event) => setNewCustomerPhone(event.target.value)}
+                      placeholder="Phone number"
+                      className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#21AC3A]"
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Email
+                    <input
+                      type="email"
+                      maxLength={100}
+                      value={newCustomerEmail}
+                      onChange={(event) => setNewCustomerEmail(event.target.value)}
+                      placeholder="Email address"
+                      className="mt-1 w-full border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#21AC3A]"
+                    />
+                  </label>
+                </div>
+                {createCustomerError && <p role="alert" className="text-sm text-red-700">{createCustomerError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={isSavingCustomer}
+                    onClick={() => { setIsCreatingCustomer(false); setCreateCustomerError(''); }}
+                    className="border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:opacity-50"
+                  >Cancel</button>
+                  <button
+                    type="submit"
+                    disabled={isSavingCustomer || !newCustomerName.trim()}
+                    className="inline-flex items-center gap-2 bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-50"
+                  >{isSavingCustomer ? 'Adding…' : 'Add and select'}</button>
+                </div>
+              </form>
+            )}
+            {!isCreatingCustomer && <div className="overflow-y-auto">
               <button type="button" onClick={() => { setSelectedCustomer(null); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
                 <span><span className="block text-sm font-semibold text-slate-800">Continue without a customer</span><span className="text-xs text-slate-500">Customer selection is optional</span></span>
                 {!selectedCustomer && <Check className="h-4 w-4 text-[#21AC3A]" />}
@@ -539,6 +729,65 @@ export default function BranchPOS() {
                 </button>
               ))}
               {!customersLoading && customers.length === 0 && <p className="px-5 py-8 text-center text-sm text-slate-500">No customers found.</p>}
+            </div>}
+          </motion.div>
+        </div>
+      )}
+
+      {isHeldTransactionsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Close held transactions"
+            className="absolute inset-0 bg-slate-900/50"
+            onClick={() => setIsHeldTransactionsOpen(false)}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative flex max-h-[80vh] w-full max-w-2xl flex-col border border-slate-300 bg-white shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Held transactions</h2>
+                <p className="text-sm text-slate-500">Resume a saved sale or remove it from this register.</p>
+              </div>
+              <button type="button" onClick={() => setIsHeldTransactionsOpen(false)} aria-label="Close held transactions" className="p-2 text-slate-500 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto">
+              {heldTransactions.length === 0 ? (
+                <p className="px-5 py-12 text-center text-sm text-slate-500">No held transactions.</p>
+              ) : heldTransactions.map((transaction) => {
+                const heldTotal = transaction.items.reduce((sum, item) => sum + item.price * item.qty - item.discount, 0);
+                const heldItemCount = transaction.items.reduce((sum, item) => sum + item.qty, 0);
+                return (
+                  <div key={transaction.id} className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-900">{transaction.customer?.name || 'Walk-in customer'}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {heldItemCount} items · Held {new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(transaction.heldAt))}
+                      </p>
+                      <p className="mt-1 truncate text-xs text-slate-500">{transaction.items.map((item) => `${item.name} × ${item.qty}`).join(', ')}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+                      <span className="font-bold text-slate-900">{formatIDR(heldTotal)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleResumeHeldTransaction(transaction)}
+                        className="bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white hover:bg-[#1d9732]"
+                      >Resume</button>
+                      <button
+                        type="button"
+                        onClick={() => setHeldTransactions((current) => current.filter((item) => item.id !== transaction.id))}
+                        aria-label={`Remove held transaction for ${transaction.customer?.name || 'walk-in customer'}`}
+                        className="border border-slate-300 p-2 text-slate-500 hover:bg-red-50 hover:text-red-700"
+                      ><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </motion.div>
         </div>
