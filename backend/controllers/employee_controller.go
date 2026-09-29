@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -26,6 +27,10 @@ var (
 	errAlreadyClockedIn    = errors.New("pegawai sudah clock-in hari ini")
 	errNotClockedIn        = errors.New("pegawai belum clock-in hari ini")
 	errAlreadyClockedOut   = errors.New("pegawai sudah clock-out hari ini")
+	errBranchLocationUnset = errors.New("lokasi cabang belum diatur; atur titik lokasi cabang terlebih dahulu")
+	errOutsideGeofence     = errors.New("lokasi perangkat berada di luar area cabang")
+	errLocationAccuracy    = errors.New("akurasi lokasi harus 100 meter atau lebih baik")
+	errLocationInvalid     = errors.New("koordinat atau akurasi lokasi tidak valid")
 )
 
 var jakartaLocation = time.FixedZone("WIB", 7*60*60)
@@ -41,9 +46,15 @@ type employeeInput struct {
 
 type employeeResponse struct {
 	models.Employee
-	AttendanceStatus string     `json:"attendance_status"`
-	ClockIn          *time.Time `json:"clock_in"`
-	ClockOut         *time.Time `json:"clock_out"`
+	AttendanceStatus  string     `json:"attendance_status"`
+	ClockIn           *time.Time `json:"clock_in"`
+	ClockOut          *time.Time `json:"clock_out"`
+	ClockInAccuracyM  *float64   `json:"clock_in_accuracy_m"`
+	ClockOutAccuracyM *float64   `json:"clock_out_accuracy_m"`
+	ClockInLatitude   *float64   `json:"clock_in_latitude"`
+	ClockInLongitude  *float64   `json:"clock_in_longitude"`
+	ClockOutLatitude  *float64   `json:"clock_out_latitude"`
+	ClockOutLongitude *float64   `json:"clock_out_longitude"`
 }
 
 func GetEmployees(c *gin.Context) {
@@ -82,10 +93,21 @@ func GetEmployees(c *gin.Context) {
 			response.AttendanceStatus = attendance.Status
 			response.ClockIn = attendance.ClockIn
 			response.ClockOut = attendance.ClockOut
+			response.ClockInAccuracyM = attendance.ClockInAccuracyM
+			response.ClockOutAccuracyM = attendance.ClockOutAccuracyM
+			response.ClockInLatitude = attendance.ClockInLatitude
+			response.ClockInLongitude = attendance.ClockInLongitude
+			response.ClockOutLatitude = attendance.ClockOutLatitude
+			response.ClockOutLongitude = attendance.ClockOutLongitude
 		}
 		data = append(data, response)
 	}
-	c.JSON(http.StatusOK, gin.H{"data": data})
+	var branch models.Branch
+	if err := config.DB.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat lokasi cabang.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": data, "branch": branch})
 }
 
 func CreateEmployee(c *gin.Context) {
@@ -219,11 +241,23 @@ func ClockInEmployee(c *gin.Context) {
 	if !ok {
 		return
 	}
+	location, ok := attendanceLocationFromRequest(c)
+	if !ok {
+		return
+	}
 
 	now := time.Now().In(jakartaLocation)
 	date := jakartaDate(now)
 	var attendance models.EmployeeAttendance
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		var branch models.Branch
+		if err := tx.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
+			return errBranchLocationUnset
+		}
+		if _, err := validateAttendanceLocation(branch, location); err != nil {
+			return err
+		}
+
 		var employee models.Employee
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND business_id = ? AND branch_id = ?", employeeID, businessID, branchID).
@@ -257,6 +291,9 @@ func ClockInEmployee(c *gin.Context) {
 			}
 		}
 		attendance.ClockIn = &now
+		attendance.ClockInLatitude = location.Latitude
+		attendance.ClockInLongitude = location.Longitude
+		attendance.ClockInAccuracyM = location.AccuracyM
 		attendance.Status = employeeAttendanceStatus(employee.Shift, now)
 		if attendance.ID == uuid.Nil {
 			return tx.Create(&attendance).Error
@@ -275,11 +312,23 @@ func ClockOutEmployee(c *gin.Context) {
 	if !ok {
 		return
 	}
+	location, ok := attendanceLocationFromRequest(c)
+	if !ok {
+		return
+	}
 
 	now := time.Now().In(jakartaLocation)
 	date := jakartaDate(now)
 	var attendance models.EmployeeAttendance
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		var branch models.Branch
+		if err := tx.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
+			return errBranchLocationUnset
+		}
+		if _, err := validateAttendanceLocation(branch, location); err != nil {
+			return err
+		}
+
 		var employee models.Employee
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND business_id = ? AND branch_id = ?", employeeID, businessID, branchID).
@@ -304,6 +353,9 @@ func ClockOutEmployee(c *gin.Context) {
 		}
 
 		attendance.ClockOut = &now
+		attendance.ClockOutLatitude = location.Latitude
+		attendance.ClockOutLongitude = location.Longitude
+		attendance.ClockOutAccuracyM = location.AccuracyM
 		return tx.Save(&attendance).Error
 	})
 	if err != nil {
@@ -311,6 +363,54 @@ func ClockOutEmployee(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"attendance": attendance})
+}
+
+type attendanceLocationInput struct {
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+	AccuracyM *float64 `json:"accuracy_m"`
+}
+
+func attendanceLocationFromRequest(c *gin.Context) (attendanceLocationInput, bool) {
+	var input attendanceLocationInput
+	if err := c.ShouldBindJSON(&input); err != nil || input.Latitude == nil || input.Longitude == nil || input.AccuracyM == nil {
+		utils.RespondError(c, http.StatusBadRequest, "Koordinat dan akurasi lokasi wajib dikirim.")
+		return input, false
+	}
+	return input, true
+}
+
+func validateAttendanceLocation(branch models.Branch, location attendanceLocationInput) (float64, error) {
+	if location.Latitude == nil || location.Longitude == nil || location.AccuracyM == nil ||
+		math.IsNaN(*location.Latitude) || math.IsInf(*location.Latitude, 0) ||
+		math.IsNaN(*location.Longitude) || math.IsInf(*location.Longitude, 0) ||
+		math.IsNaN(*location.AccuracyM) || math.IsInf(*location.AccuracyM, 0) ||
+		*location.Latitude < -90 || *location.Latitude > 90 ||
+		*location.Longitude < -180 || *location.Longitude > 180 || *location.AccuracyM <= 0 {
+		return 0, errLocationInvalid
+	}
+	if *location.AccuracyM > 100 {
+		return 0, errLocationAccuracy
+	}
+	if branch.Latitude == nil || branch.Longitude == nil || branch.GeofenceRadiusM <= 0 {
+		return 0, errBranchLocationUnset
+	}
+	distance := haversineDistanceMeters(*branch.Latitude, *branch.Longitude, *location.Latitude, *location.Longitude)
+	if distance > float64(branch.GeofenceRadiusM) {
+		return distance, errOutsideGeofence
+	}
+	return distance, nil
+}
+
+func haversineDistanceMeters(latitudeA, longitudeA, latitudeB, longitudeB float64) float64 {
+	const earthRadiusMeters = 6371000
+	toRadians := func(value float64) float64 { return value * math.Pi / 180 }
+	latDelta := toRadians(latitudeB - latitudeA)
+	lonDelta := toRadians(longitudeB - longitudeA)
+	a := math.Sin(latDelta/2)*math.Sin(latDelta/2) +
+		math.Cos(toRadians(latitudeA))*math.Cos(toRadians(latitudeB))*
+			math.Sin(lonDelta/2)*math.Sin(lonDelta/2)
+	return earthRadiusMeters * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
 func employeeAttendanceScope(c *gin.Context) (uuid.UUID, uuid.UUID, uuid.UUID, bool) {
@@ -357,6 +457,12 @@ func employeeToResponse(employee models.Employee, attendance *models.EmployeeAtt
 		response.AttendanceStatus = attendance.Status
 		response.ClockIn = attendance.ClockIn
 		response.ClockOut = attendance.ClockOut
+		response.ClockInAccuracyM = attendance.ClockInAccuracyM
+		response.ClockOutAccuracyM = attendance.ClockOutAccuracyM
+		response.ClockInLatitude = attendance.ClockInLatitude
+		response.ClockInLongitude = attendance.ClockInLongitude
+		response.ClockOutLatitude = attendance.ClockOutLatitude
+		response.ClockOutLongitude = attendance.ClockOutLongitude
 	}
 	return response
 }
@@ -371,8 +477,13 @@ func respondEmployeeAttendanceError(c *gin.Context, err error) {
 	case errors.Is(err, errEmployeeNotFound):
 		utils.RespondError(c, http.StatusNotFound, "Pegawai tidak ditemukan.")
 	case errors.Is(err, errEmployeeInactive), errors.Is(err, errEmployeeUnscheduled),
-		errors.Is(err, errAlreadyClockedIn), errors.Is(err, errNotClockedIn), errors.Is(err, errAlreadyClockedOut):
+		errors.Is(err, errAlreadyClockedIn), errors.Is(err, errNotClockedIn), errors.Is(err, errAlreadyClockedOut),
+		errors.Is(err, errBranchLocationUnset):
 		utils.RespondError(c, http.StatusConflict, err.Error()+".")
+	case errors.Is(err, errOutsideGeofence):
+		utils.RespondError(c, http.StatusForbidden, err.Error()+".")
+	case errors.Is(err, errLocationAccuracy), errors.Is(err, errLocationInvalid):
+		utils.RespondError(c, http.StatusBadRequest, err.Error()+".")
 	default:
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal mencatat kehadiran pegawai.")
 	}

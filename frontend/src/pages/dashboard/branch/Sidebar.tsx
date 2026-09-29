@@ -6,6 +6,7 @@ import {
   Package,
   Users,
   UserCog,
+  Clock3,
   Settings,
   TrendingUp,
   ChevronLeft,
@@ -21,6 +22,7 @@ export default function Sidebar({ branchId }: { branchId: string }) {
     { name: 'Inventori & Stok', icon: <Package className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/inventory` },
     { name: 'Pelanggan (CRS)', icon: <Users className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/customers` },
     { name: 'Pegawai (EMS)', icon: <UserCog className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/employees` },
+    { name: 'Presensi', icon: <Clock3 className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/attendance` },
     { name: 'Laporan', icon: <TrendingUp className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/reports` },
     { name: 'Pengaturan', icon: <Settings className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/settings` },
   ];

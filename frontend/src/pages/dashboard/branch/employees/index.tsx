@@ -8,8 +8,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  LogIn,
-  LogOut,
+
   Mail,
   Pencil,
   Phone,
@@ -154,7 +153,7 @@ export default function EmployeesIndex() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
-  const [attendanceActionEmployeeId, setAttendanceActionEmployeeId] = useState<string | null>(null);
+
   const [pageError, setPageError] = useState('');
   const [formError, setFormError] = useState('');
   const [query, setQuery] = useState('');
@@ -308,28 +307,6 @@ export default function EmployeesIndex() {
     }
   };
 
-  const handleAttendanceAction = async (employee: Employee, action: 'clock-in' | 'clock-out') => {
-    if (!branchId) return;
-    setAttendanceActionEmployeeId(employee.id);
-    setPageError('');
-    try {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const response = await fetch(`/api/branches/${branchId}/employees/${employee.id}/attendance/${action}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Gagal mencatat kehadiran.');
-      const attendance = payload.attendance as { status: AttendanceStatus; clock_in: string | null; clock_out: string | null };
-      setEmployees((current) => current.map((item) => item.id === employee.id
-        ? { ...item, attendance: attendance.status, clockIn: attendance.clock_in, clockOut: attendance.clock_out }
-        : item));
-    } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Gagal mencatat kehadiran.');
-    } finally {
-      setAttendanceActionEmployeeId(null);
-    }
-  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -446,16 +423,7 @@ export default function EmployeesIndex() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-1">
-                        {employee.status === 'Aktif' && employee.shift.trim() !== '' && employee.shift !== '—' && !employee.clockIn && (
-                          <button type="button" onClick={() => handleAttendanceAction(employee, 'clock-in')} disabled={attendanceActionEmployeeId === employee.id} className="rounded-lg p-2 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40" aria-label={`Clock-in ${employee.name}`} title="Clock-in">
-                            <LogIn className="h-4 w-4" />
-                          </button>
-                        )}
-                        {employee.clockIn && !employee.clockOut && (
-                          <button type="button" onClick={() => handleAttendanceAction(employee, 'clock-out')} disabled={attendanceActionEmployeeId === employee.id} className="rounded-lg p-2 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40" aria-label={`Clock-out ${employee.name}`} title="Clock-out">
-                            <LogOut className="h-4 w-4" />
-                          </button>
-                        )}
+
                         <button type="button" onClick={() => openEditModal(employee)} className="rounded-lg p-2 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-700" aria-label={`Edit ${employee.name}`} title="Edit pegawai">
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -546,7 +514,7 @@ export default function EmployeesIndex() {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm"><Clock3 className="h-4 w-4" /></span>
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">Ringkasan kehadiran</h2>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">Gunakan tombol clock-in saat mulai shift dan clock-out saat selesai. Catatan disimpan per tanggal WIB.</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">Catatan disimpan per tanggal WIB. Kelola clock-in dan clock-out melalui menu Presensi.</p>
               </div>
             </div>
             <div className="mt-4 flex items-end justify-between border-t border-emerald-100 pt-4">

@@ -20,11 +20,24 @@ import {
 } from 'lucide-react';
 
 
+interface BranchRecord {
+  id: string;
+  name: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geofence_radius_m?: number;
+}
+
+interface DashboardOrganization {
+  id: string;
+  status?: string;
+}
 
 export default function DashboardIndex() {
-  const { activeOrg } = useOutletContext<{ activeOrg: any }>();
+  const { activeOrg } = useOutletContext<{ activeOrg: DashboardOrganization }>();
   const navigate = useNavigate();
-  const [branches, setBranches] = useState<any[]>([]);
+  const [branches, setBranches] = useState<BranchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -33,12 +46,14 @@ export default function DashboardIndex() {
   const [newBranchAddress, setNewBranchAddress] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [editingBranch, setEditingBranch] = useState<any>(null);
+  const [editingBranch, setEditingBranch] = useState<BranchRecord | null>(null);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const [mapCenter, setMapCenter] = useState<[number, number]>([-6.200000, 106.816666]);
   const [mapZoom, setMapZoom] = useState(13);
+  const [hasBranchLocation, setHasBranchLocation] = useState(false);
+  const [geofenceRadius, setGeofenceRadius] = useState(100);
 
   const isPending = activeOrg?.status === 'pending';
 
@@ -104,6 +119,7 @@ export default function DashboardIndex() {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
         setMapCenter([lat, lon]);
+        setHasBranchLocation(true);
         setMapZoom(16);
         await fetchAddressFromCoords(lat, lon);
         setIsGettingLocation(false);
@@ -137,7 +153,10 @@ export default function DashboardIndex() {
         body: JSON.stringify({
           business_id: activeOrg.id,
           name: newBranchName,
-          address: newBranchAddress
+          address: newBranchAddress,
+          latitude: hasBranchLocation ? mapCenter[0] : null,
+          longitude: hasBranchLocation ? mapCenter[1] : null,
+          geofence_radius_m: geofenceRadius
         })
       });
 
@@ -166,13 +185,22 @@ export default function DashboardIndex() {
     setEditingBranch(null);
     setNewBranchName('');
     setNewBranchAddress('');
+    setHasBranchLocation(false);
+    setGeofenceRadius(100);
     setIsModalOpen(true);
   };
 
-  const openEditModal = (branch: any) => {
+  const openEditModal = (branch: BranchRecord) => {
     setEditingBranch(branch);
     setNewBranchName(branch.name);
     setNewBranchAddress(branch.address || '');
+    const hasLocation = branch.latitude != null && branch.longitude != null;
+    setHasBranchLocation(hasLocation);
+    if (branch.latitude != null && branch.longitude != null) {
+      setMapCenter([branch.latitude, branch.longitude]);
+      setMapZoom(16);
+    }
+    setGeofenceRadius(branch.geofence_radius_m || 100);
     setIsModalOpen(true);
     setOpenMenuId(null);
   };
@@ -441,12 +469,30 @@ export default function DashboardIndex() {
                       }}
                       onClick={({ latLng }) => {
                         setMapCenter(latLng);
+                        setHasBranchLocation(true);
                         fetchAddressFromCoords(latLng[0], latLng[1]);
                       }}
                     >
-                      <Marker width={40} anchor={mapCenter} color="#21AC3A" />
+                      {hasBranchLocation && <Marker width={40} anchor={mapCenter} color="#21AC3A" />}
                     </Map>
                   </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {hasBranchLocation
+                      ? `Titik presensi: ${mapCenter[0].toFixed(6)}, ${mapCenter[1].toFixed(6)}`
+                      : 'Pilih titik pada peta atau gunakan lokasi saat ini untuk mengaktifkan presensi berbasis lokasi.'}
+                  </p>
+                  <label className="mt-3 block text-sm font-semibold text-slate-700">
+                    Radius presensi (meter)
+                    <input
+                      type="number"
+                      min={10}
+                      max={5000}
+                      step={10}
+                      value={geofenceRadius}
+                      onChange={(event) => setGeofenceRadius(Number(event.target.value) || 100)}
+                      className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
+                    />
+                  </label>
                 </div>
 
                 <div className="pt-4 flex items-center justify-end gap-3">
