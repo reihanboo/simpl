@@ -16,6 +16,8 @@ import {
   Check,
   Loader2,
   Phone
+  Download,
+  RefreshCw,
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -26,6 +28,14 @@ interface Product {
   selling_price_idr: number;
   current_stock: number;
   image?: string;
+}
+
+interface ProductResponse {
+  product_id: string;
+  name: string;
+  sku: string;
+  selling_price_idr: number;
+  current_stock?: number;
 }
 
 
@@ -45,6 +55,35 @@ interface Customer {
   loyalty_points: number;
 }
 
+interface Order {
+  id: string;
+  order_number: string;
+  total_amount_idr: number;
+  payment_method: string;
+  payment_status: string;
+  created_at: string;
+  items_count: number;
+}
+
+type PaymentMethod = 'cash' | 'qris' | 'debit' | 'credit' | 'transfer' | 'ewallet';
+
+const paymentMethods: Array<{ value: PaymentMethod; label: string }> = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'qris', label: 'QRIS' },
+  { value: 'debit', label: 'Debit card' },
+  { value: 'credit', label: 'Credit card' },
+  { value: 'transfer', label: 'Bank transfer' },
+  { value: 'ewallet', label: 'E-wallet' },
+];
+
+const formatIDR = (amount: number) => `Rp ${Math.round(amount).toLocaleString('id-ID')}`;
+const localDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function BranchPOS() {
   const { id: branchId } = useParams();
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,13 +92,71 @@ export default function BranchPOS() {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [customerLoadError, setCustomerLoadError] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customerQuery, setCustomerQuery] = useState('');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [transactionQuery, setTransactionQuery] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+
+  const fetchOrders = useCallback(async () => {
+    if (!branchId) return;
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const today = localDateKey(new Date());
+      const params = new URLSearchParams({ start_date: today, end_date: today });
+      const response = await fetch(`/api/branches/${branchId}/reports/sales?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setOrders(result.orders || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch transactions', error);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [branchId]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => { void fetchOrders(); });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fetchOrders]);
+
+  useEffect(() => {
+    if (!isCustomerModalOpen || !branchId) return;
+    const controller = new AbortController();
+    const fetchCustomers = async () => {
+      setCustomersLoading(true);
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const params = new URLSearchParams({ q: customerQuery, page: '1', page_size: '100' });
+        const response = await fetch(`/api/branches/${branchId}/customers?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          const result = await response.json();
+          setCustomers(result.data || []);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Failed to fetch customers', error);
+      } finally {
+        if (!controller.signal.aborted) setCustomersLoading(false);
+      }
+    };
+    void fetchCustomers();
+    return () => controller.abort();
+  }, [branchId, customerQuery, isCustomerModalOpen]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -70,7 +167,8 @@ export default function BranchPOS() {
         });
         if (res.ok) {
           const data = await res.json();
-          const mappedProducts = (data.data || []).map((p: any) => ({
+          const payload: { data?: ProductResponse[] } = data;
+          const mappedProducts = (payload.data || []).map((p) => ({
             id: p.product_id,
             name: p.name,
             sku: p.sku,
@@ -158,6 +256,41 @@ export default function BranchPOS() {
   const filteredProducts = products.filter(p => {
     return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase());
   });
+  const filteredOrders = orders.filter((order) =>
+    order.order_number.toLowerCase().includes(transactionQuery.toLowerCase()) &&
+    (paymentFilter === 'all' || order.payment_method.toLowerCase() === paymentFilter),
+  );
+  const totalToday = orders.reduce((sum, order) => sum + order.total_amount_idr, 0);
+  const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
+
+  const startNewTransaction = () => {
+    if (cart.length > 0 && !window.confirm('Clear the current sale and start a new transaction?')) return;
+    setCart([]);
+    setSelectedCustomer(null);
+    setSearchQuery('');
+    setAmountPaid('');
+  };
+
+  const exportTransactionLog = () => {
+    const rows = [
+      ['Transaction', 'Time', 'Items', 'Payment', 'Total', 'Status'],
+      ...filteredOrders.map((order) => [
+        order.order_number,
+        new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+        order.items_count,
+        order.payment_method,
+        order.total_amount_idr,
+        order.payment_status,
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `pos-transactions-${localDateKey(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -200,75 +333,167 @@ export default function BranchPOS() {
             <span className="truncate">{selectedCustomer?.name || 'Pilih pelanggan'}</span>
           </button>
           <button
-            onClick={() => setCart([])}
-            disabled={cart.length === 0}
-            className="text-sm font-semibold text-red-500 hover:text-red-600 disabled:opacity-50 transition-colors"
+            type="button"
+            onClick={startNewTransaction}
+            className="flex items-center gap-2 bg-[#21AC3A] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[#1d9732]"
           >
-            Clear
+            <Plus className="h-4 w-4" />
+            Hold Transaction
           </button>
         </div>
+      </div>
 
-        {/* Cart Items List */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-6">
-              <ShoppingCart className="w-16 h-16 mb-4 opacity-20" />
-              <p className="text-center font-medium">Cart is empty.</p>
-              <p className="text-sm text-center mt-1">Select products to begin transaction.</p>
+      <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:p-6 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <section className="flex min-h-115 flex-col border border-slate-300 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 px-4 py-3">
+            <div>
+              <h2 className="font-bold text-slate-900">Transaction log</h2>
+              <p className="text-xs text-slate-500">Today’s sales and payment status</p>
             </div>
-          ) : (
-            <div className="flex flex-col">
-              {cart.map(item => (
-                <div
-                  key={item.id}
-                  className="p-4 border-b border-slate-200 transition-colors bg-white hover:bg-slate-50"
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <h4 className="font-semibold text-sm text-slate-900">
-                      {item.name}
-                    </h4>
-                    <p className="font-bold text-sm text-slate-900">
-                      Rp {(item.price * item.qty).toLocaleString('id-ID')}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
-                      <button
-                        onClick={() => updateQty(item.id, -1)}
-                        className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-8 text-center text-sm font-bold text-slate-900">
-                        {item.qty}
+            <button
+              type="button"
+              onClick={exportTransactionLog}
+              className="flex items-center gap-2 border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              Export log
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 border-b border-slate-300 px-3 py-2">
+            <div className="relative min-w-55 flex-1 sm:max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                placeholder="Search transaction ID"
+                value={transactionQuery}
+                onChange={(event) => setTransactionQuery(event.target.value)}
+                className="w-full border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#21AC3A]"
+              />
+            </div>
+            <span className="inline-flex items-center border border-slate-300 px-3 text-sm text-slate-600">Today</span>
+            <select
+              value={paymentFilter}
+              onChange={(event) => setPaymentFilter(event.target.value)}
+              aria-label="Filter by payment method"
+              className="border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#21AC3A]"
+            >
+              <option value="all">All payments</option>
+              <option value="cash">Cash</option>
+              <option value="qris">QRIS</option>
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+              <option value="transfer">Transfer</option>
+              <option value="ewallet">E-wallet</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => { setOrdersLoading(true); void fetchOrders(); }}
+              title="Refresh transactions"
+              className="border border-slate-300 px-3 text-slate-600 hover:bg-slate-50"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full border-collapse text-left">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="border-b border-slate-300 px-3 py-3">Transaction</th>
+                  <th className="border-b border-slate-300 px-3 py-3">Time</th>
+                  <th className="border-b border-slate-300 px-3 py-3 text-right">Items</th>
+                  <th className="border-b border-slate-300 px-3 py-3">Payment</th>
+                  <th className="border-b border-slate-300 px-3 py-3 text-right">Total</th>
+                  <th className="border-b border-slate-300 px-3 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-sm">
+                {ordersLoading ? (
+                  <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500">Loading transactions…</td></tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-14 text-center text-slate-500">
+                      {orders.length ? 'No transactions match these filters.' : 'No transactions recorded today yet.'}
+                    </td>
+                  </tr>
+                ) : filteredOrders.map((order, index) => (
+                  <tr key={order.id} className={index % 2 ? 'bg-slate-50/70' : 'bg-white'}>
+                    <td className="px-3 py-3 font-semibold text-slate-900">{order.order_number}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-slate-500">
+                      {new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                    </td>
+                    <td className="px-3 py-3 text-right text-slate-600">{order.items_count}</td>
+                    <td className="px-3 py-3 uppercase text-slate-600">{order.payment_method}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right text-slate-600">{formatIDR(order.total_amount_idr)}</td>
+                    <td className="px-3 py-3">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${order.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {order.payment_status === 'paid' ? 'Completed' : order.payment_status}
                       </span>
-                      <button
-                        onClick={() => updateQty(item.id, 1)}
-                        className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-200 px-3 py-3 text-sm text-slate-500">
+            <span>{orders.length} transactions today</span>
+            <span>{formatIDR(totalToday)} total sales</span>
+          </div>
+        </section>
 
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+        <aside className="flex min-h-120 flex-col border border-slate-300 bg-white shadow-sm">
+          <div className="flex items-start justify-between border-b border-slate-300 px-4 py-3">
+            <div>
+              <h2 className="font-bold text-slate-900">Current sale</h2>
+              <p className="text-xs text-slate-500">Draft transaction</p>
+            </div>
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{itemCount} items</span>
+          </div>
+          {selectedCustomer && (
+            <div className="flex items-center justify-between border-b border-slate-200 bg-green-50 px-3 py-2 text-sm">
+              <span className="truncate font-medium text-green-900">{selectedCustomer.name}</span>
+              <button type="button" onClick={() => setSelectedCustomer(null)} className="ml-2 text-xs font-semibold text-green-800 hover:underline">Remove</button>
             </div>
           )}
-        </div>
-
-        {/* Total Summary */}
-        <div className="bg-white border-t border-slate-200 p-4 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <div className="flex justify-between items-center">
-            <span className="text-lg font-bold text-slate-700">Total</span>
-            <span className="text-3xl font-black text-[#21AC3A]">Rp {total.toLocaleString('id-ID')}</span>
+          <div className="relative border-b border-slate-300 p-3">
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#21AC3A]" />
+                <input
+                  autoFocus
+                  type="search"
+                  placeholder="Scan barcode or search product"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  className="w-full border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#21AC3A]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                title="Scan barcode"
+                className="border border-slate-300 px-3 text-slate-600 hover:bg-slate-50"
+              >
+                <ScanLine className="h-4 w-4" />
+              </button>
+            </div>
+            {searchQuery && (
+              <div className="absolute left-3 right-3 top-full z-20 max-h-64 overflow-auto border border-slate-300 bg-white shadow-lg">
+                {filteredProducts.length ? filteredProducts.slice(0, 8).map((product) => (
+                  <button
+                    type="button"
+                    key={product.id}
+                    onClick={() => { addToCart(product); setSearchQuery(''); }}
+                    className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-slate-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-slate-900">{product.name}</span>
+                      <span className="block text-xs text-slate-500">{product.sku} · Stock {product.current_stock}</span>
+                    </span>
+                    <span className="whitespace-nowrap text-sm font-semibold text-slate-800">{formatIDR(product.selling_price_idr)}</span>
+                  </button>
+                )) : <p className="px-3 py-4 text-sm text-slate-500">No products found.</p>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -310,61 +535,60 @@ export default function BranchPOS() {
               className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/50 transition-all"
             />
           </div>
-          <button
-            onClick={() => setIsScannerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors ml-auto shadow-sm"
-          >
-            <ScanLine className="w-4 h-4" />
-            Scan Barcode
-          </button>
-        </div>
+          <div className="space-y-2 border-t border-slate-300 px-3 py-3 text-sm">
+            <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatIDR(subtotal)}</span></div>
+            <div className="flex justify-between text-slate-600"><span>Discount</span><span>{formatIDR(totalDiscount)}</span></div>
+            <div className="flex items-center justify-between border-t border-slate-200 pt-2 font-bold text-slate-900"><span>Total</span><span className="text-xl">{formatIDR(total)}</span></div>
+            <button
+              type="button"
+              onClick={() => setIsPaymentModalOpen(true)}
+              disabled={cart.length === 0}
+              className="mt-2 w-full bg-[#21AC3A] py-3 text-sm font-bold text-white hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="inline-flex items-center justify-center gap-2"><CreditCard className="h-4 w-4" /> Charge {formatIDR(total)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCart([])}
+              disabled={cart.length === 0}
+              className="w-full border border-slate-300 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Clear sale
+            </button>
+          </div>
+        </aside>
+      </main>
 
-        {/* Product Table */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
-          <table className="w-full text-left border-collapse">
-            <thead className="sticky top-0 bg-white shadow-sm z-10 text-xs font-semibold text-slate-500 uppercase">
-              <tr>
-                <th className="px-4 py-3 border-b border-slate-200">SKU</th>
-                <th className="px-4 py-3 border-b border-slate-200">Produk</th>
-                <th className="px-4 py-3 border-b border-slate-200 text-right">Stok</th>
-                <th className="px-4 py-3 border-b border-slate-200 text-right">Harga</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((product) => (
-                <tr
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className="hover:bg-slate-100/80 cursor-pointer transition-colors group bg-white"
-                >
-                  <td className="px-4 py-3 text-sm font-medium text-slate-500 font-mono">
-                    {product.sku}
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-bold text-slate-800">{product.name}</p>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className={`text-xs font-bold px-2 py-1 rounded-md ${product.current_stock <= 20 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                      {product.current_stock}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-slate-900">
-                    Rp {product.selling_price_idr.toLocaleString('id-ID')}
-                  </td>
-                </tr>
+      {isCustomerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button type="button" aria-label="Close customer selection" className="absolute inset-0 bg-slate-900/50" onClick={() => setIsCustomerModalOpen(false)} />
+          <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="relative flex max-h-[80vh] w-full max-w-lg flex-col border border-slate-300 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div><h2 className="text-lg font-bold text-slate-900">Select customer</h2><p className="text-sm text-slate-500">Optional for this transaction</p></div>
+              <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="border-b border-slate-200 p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input autoFocus value={customerQuery} onChange={(event) => setCustomerQuery(event.target.value)} placeholder="Search name, phone, or email" className="w-full border border-slate-300 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#21AC3A]" />
+              </div>
+            </div>
+            <div className="overflow-y-auto">
+              <button type="button" onClick={() => { setSelectedCustomer(null); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
+                <span><span className="block text-sm font-semibold text-slate-800">Continue without a customer</span><span className="text-xs text-slate-500">Customer selection is optional</span></span>
+                {!selectedCustomer && <Check className="h-4 w-4 text-[#21AC3A]" />}
+              </button>
+              {customersLoading ? <p className="px-5 py-8 text-center text-sm text-slate-500">Loading customers…</p> : customers.map((customer) => (
+                <button type="button" key={customer.id} onClick={() => { setSelectedCustomer(customer); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
+                  <span><span className="block text-sm font-semibold text-slate-900">{customer.name}</span><span className="text-xs text-slate-500">{customer.phone || customer.email || 'No contact details'}</span></span>
+                  {selectedCustomer?.id === customer.id && <Check className="h-4 w-4 text-[#21AC3A]" />}
+                </button>
               ))}
-              {filteredProducts.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-16 text-center text-slate-400">
-                    <ScanLine className="w-12 h-12 mb-2 mx-auto opacity-20" />
-                    <p className="text-sm">Tidak ada produk ditemukan.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              {!customersLoading && customers.length === 0 && <p className="px-5 py-8 text-center text-sm text-slate-500">No customers found.</p>}
+            </div>
+          </motion.div>
         </div>
-      </div>
+      )}
 
       {isCustomerPickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsCustomerPickerOpen(false); }}>
@@ -410,121 +634,161 @@ export default function BranchPOS() {
       {/* PAYMENT MODAL */}
       {isPaymentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsPaymentModalOpen(false)} />
+          <div className="absolute inset-0 bg-slate-900/45" onClick={() => setIsPaymentModalOpen(false)} />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="relative w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col"
+            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
           >
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center shrink-0">
-              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-[#21AC3A]" />
-                Selesaikan Pembayaran
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-300 bg-white px-5 py-4">
+              <h2 className="flex items-center gap-3 text-lg font-bold text-slate-900">
+                <span className="flex h-10 w-10 items-center justify-center border border-green-200 bg-green-50 text-[#21AC3A]"><CreditCard className="h-5 w-5" /></span>
+                <span><span className="block">Selesaikan Pembayaran</span><span className="mt-0.5 block text-xs font-normal text-slate-500">Pilih metode dan konfirmasi pembayaran</span></span>
               </h2>
               <button
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="border border-slate-300 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <p className="text-sm font-semibold text-slate-500 mb-1">Total Tagihan</p>
-                <p className="text-4xl font-black text-[#21AC3A]">
+            <div className="space-y-4 overflow-y-auto bg-[#f5f5f5] p-5">
+              <div className="flex items-center justify-between gap-4 border border-slate-300 bg-white px-4 py-3">
+                <p className="text-sm font-semibold text-slate-600">Total tagihan</p>
+                <p className="text-2xl font-bold tracking-tight text-[#21AC3A]">
                   Rp {total.toLocaleString('id-ID')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Nominal Uang Diterima (Rp)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full px-4 py-3 text-lg font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                  placeholder="0"
-                  autoFocus
-                />
-              </div>
-
-              {typeof amountPaid === 'number' && amountPaid > 0 && (
-                <div className="flex justify-between items-center p-4 bg-slate-100 rounded-xl border border-slate-200">
-                  <span className="font-semibold text-slate-600">Kembalian:</span>
-                  <span className={`text-xl font-bold ${amountPaid - total < 0 ? 'text-red-500' : 'text-slate-900'}`}>
-                    Rp {(amountPaid - total).toLocaleString('id-ID')}
-                  </span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-4 gap-2 mt-4">
-                {/* Numbers */}
-                <div className="col-span-3 grid grid-cols-3 gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                <p className="text-sm font-semibold text-slate-700">Metode pembayaran</p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {paymentMethods.map((method) => (
                     <button
-                      key={num}
-                      onClick={() => handlePaymentNumpad(num.toString())}
-                      className="bg-white border border-slate-200 rounded-xl text-xl font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-[#21AC3A] transition-all active:scale-95 py-3 flex items-center justify-center"
+                      key={method.value}
+                      type="button"
+                      aria-pressed={paymentMethod === method.value}
+                      onClick={() => {
+                        setPaymentMethod(method.value);
+                        setAmountPaid('');
+                      }}
+                      className={`border px-3 py-3 text-left text-sm font-semibold transition-colors ${paymentMethod === method.value ? 'border-[#21AC3A] bg-green-50 text-[#16852A]' : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'}`}
                     >
-                      {num}
+                      {method.label}
                     </button>
                   ))}
-                  <button
-                    onClick={() => handlePaymentNumpad('000')}
-                    className="bg-white border border-slate-200 rounded-xl text-lg font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-[#21AC3A] transition-all active:scale-95 py-3 flex items-center justify-center"
-                  >
-                    000
-                  </button>
-                  <button
-                    onClick={() => handlePaymentNumpad('0')}
-                    className="bg-white border border-slate-200 rounded-xl text-xl font-bold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-[#21AC3A] transition-all active:scale-95 py-3 flex items-center justify-center"
-                  >
-                    0
-                  </button>
-                  <button
-                    onClick={() => handlePaymentNumpad('.')}
-                    className="bg-slate-100 border border-slate-200 rounded-xl text-xl font-bold text-slate-700 shadow-sm hover:bg-slate-200 transition-all active:scale-95 py-3 flex items-center justify-center"
-                  >
-                    .
-                  </button>
-                </div>
-
-                {/* Actions */}
-                <div className="grid grid-rows-4 gap-2">
-                  <button
-                    onClick={() => handlePaymentNumpad('DEL')}
-                    className="bg-red-50 border border-red-200 rounded-xl text-red-600 shadow-sm hover:bg-red-100 transition-all active:scale-95 flex items-center justify-center"
-                  >
-                    <Delete className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={() => handlePaymentNumpad('C')}
-                    className="bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-600 shadow-sm hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center"
-                  >
-                    C
-                  </button>
-                  <button
-                    onClick={() => handlePaymentNumpad('+50K')}
-                    className="bg-[#21AC3A]/10 border border-[#21AC3A]/30 rounded-xl font-bold text-[#21AC3A] shadow-sm hover:bg-[#21AC3A]/20 transition-all active:scale-95 flex items-center justify-center text-sm"
-                  >
-                    +50K
-                  </button>
-                  <button
-                    onClick={() => handlePaymentNumpad('EXACT')}
-                    className="bg-amber-100 border border-amber-300 rounded-xl font-bold text-amber-700 shadow-sm hover:bg-amber-200 transition-all active:scale-95 flex items-center justify-center text-sm"
-                  >
-                    Uang Pas
-                  </button>
                 </div>
               </div>
+
+              {paymentMethod === 'cash' ? (
+                <>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-slate-700">Nominal uang diterima (Rp)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={amountPaid}
+                      onChange={(e) => setAmountPaid(e.target.value ? Number(e.target.value) : '')}
+                      className="w-full border border-slate-300 bg-white px-4 py-3 text-xl font-semibold text-slate-900 outline-none transition-colors focus:border-[#21AC3A]"
+                      placeholder="0"
+                      autoFocus
+                    />
+                  </div>
+
+                  {typeof amountPaid === 'number' && amountPaid > 0 && (
+                    <div className="flex items-center justify-between border border-slate-300 bg-white px-4 py-3">
+                      <span className="font-semibold text-slate-600">Kembalian:</span>
+                      <span className={`text-xl font-bold ${amountPaid - total < 0 ? 'text-red-500' : 'text-slate-900'}`}>
+                        Rp {(amountPaid - total).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="col-span-3 grid grid-cols-3 gap-2">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => handlePaymentNumpad(num.toString())}
+                          className="flex items-center justify-center border border-slate-300 bg-white py-3 text-lg font-semibold text-slate-800 transition-colors hover:border-[#21AC3A] hover:bg-green-50"
+                        >
+                          {num}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('000')}
+                        className="flex items-center justify-center border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-800 transition-colors hover:border-[#21AC3A] hover:bg-green-50"
+                      >
+                        000
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('0')}
+                        className="flex items-center justify-center border border-slate-300 bg-white py-3 text-lg font-semibold text-slate-800 transition-colors hover:border-[#21AC3A] hover:bg-green-50"
+                      >
+                        0
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('00')}
+                        className="flex items-center justify-center border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-800 transition-colors hover:border-[#21AC3A] hover:bg-green-50"
+                      >
+                        00
+                      </button>
+                    </div>
+
+                    <div className="grid grid-rows-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('DEL')}
+                        aria-label="Delete last digit"
+                        className="flex items-center justify-center border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100"
+                      >
+                        <Delete className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('C')}
+                        className="flex items-center justify-center border border-slate-300 bg-slate-100 font-semibold text-slate-700 transition-colors hover:bg-slate-200"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('+50K')}
+                        className="flex items-center justify-center border border-green-200 bg-green-50 text-sm font-semibold text-[#21AC3A] transition-colors hover:bg-green-100"
+                      >
+                        +50K
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePaymentNumpad('EXACT')}
+                        className="flex items-center justify-center border border-slate-300 bg-white text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        Uang pas
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="border border-green-200 bg-green-50 px-4 py-3">
+                  <p className="text-sm font-semibold text-green-900">
+                    {paymentMethods.find((method) => method.value === paymentMethod)?.label} dipilih
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-green-800">
+Verifikasi pembayaran telah diterima sebelum konfirmasi. Transaksi akan langsung dicatat sebagai lunas.
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-3">
+            <div className="flex shrink-0 gap-3 border-t border-slate-300 bg-white px-5 py-4">
               <button
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="flex-1 px-4 py-3 text-sm font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
+                className="flex-1 border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-900"
               >
                 Batal
               </button>
@@ -532,9 +796,9 @@ export default function BranchPOS() {
                 onClick={async () => {
                   try {
                     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-                    
+
                     const orderPayload = {
-                      payment_method: 'cash',
+                      payment_method: paymentMethod,
                       ...(selectedCustomer ? { customer_id: selectedCustomer.id } : {}),
                       items: cart.map(item => ({
                         product_id: item.id,
@@ -557,14 +821,15 @@ export default function BranchPOS() {
                     }
 
                     toast.success('Pembayaran Berhasil! Stok telah diperbarui.');
-                    
+
                     // Refresh products to get latest stock
                     const res = await fetch(`/api/branches/${branchId}/products`, {
                       headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (res.ok) {
                       const data = await res.json();
-                      const mappedProducts = (data.data || []).map((p: any) => ({
+                      const payload: { data?: ProductResponse[] } = data;
+                      const mappedProducts = (payload.data || []).map((p) => ({
                         id: p.product_id,
                         name: p.name,
                         sku: p.sku,
@@ -579,15 +844,16 @@ export default function BranchPOS() {
                     setSelectedCustomer(null);
                     setIsPaymentModalOpen(false);
                     setAmountPaid('');
-                  } catch (err: any) {
+                    void fetchOrders();
+                  } catch (err: unknown) {
                     console.error(err);
-                    toast.error(err.message || 'Terjadi kesalahan saat memproses pembayaran');
+                    toast.error(err instanceof Error ? err.message : 'Terjadi kesalahan saat memproses pembayaran');
                   }
                 }}
-                disabled={typeof amountPaid !== 'number' || amountPaid < total}
-                className="flex-1 px-4 py-3 text-sm font-bold text-white bg-[#21AC3A] hover:bg-[#1d9732] shadow-sm shadow-[#21AC3A]/20 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                disabled={paymentMethod === 'cash' && (typeof amountPaid !== 'number' || amountPaid < total)}
+                className="flex-1 bg-[#21AC3A] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Selesaikan
+                {paymentMethod === 'cash' ? 'Selesaikan pembayaran' : `Konfirmasi ${paymentMethods.find((method) => method.value === paymentMethod)?.label ?? 'pembayaran'}`}
               </button>
             </div>
           </motion.div>
@@ -601,7 +867,10 @@ export default function BranchPOS() {
           onScan={(decodedText) => {
             // Play a beep sound
             try {
-              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const AudioContextConstructor = window.AudioContext ||
+                (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+              if (!AudioContextConstructor) throw new Error('Audio playback is unavailable');
+              const audioCtx = new AudioContextConstructor();
               const oscillator = audioCtx.createOscillator();
               const gainNode = audioCtx.createGain();
               oscillator.connect(gainNode);
@@ -642,7 +911,7 @@ function ScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (text:
     onScanRef.current = onScan;
   }, [onScan]);
 
-  const handleScan = useCallback((result: any[]) => {
+  const handleScan = useCallback((result: Array<{ rawValue: string }>) => {
     if (result && result.length > 0) {
       const text = result[0].rawValue;
       onScanRef.current(text);

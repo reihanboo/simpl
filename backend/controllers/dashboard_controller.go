@@ -69,7 +69,7 @@ func GetBranchDashboard(c *gin.Context) {
 	var dailyRows []dailyRow
 	if err := config.DB.Raw(`
 		SELECT to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') AS sale_date,
-		       COALESCE(SUM(o.total_amount_id_r), 0)::bigint AS revenue,
+		       COALESCE(SUM(o.total_amount_idr), 0)::bigint AS revenue,
 		       COUNT(*)::int AS orders
 		FROM orders o
 		WHERE o.branch_id = ?
@@ -111,7 +111,7 @@ func GetBranchDashboard(c *gin.Context) {
 	var revenueRows []dailyRow
 	config.DB.Raw(`
 		SELECT to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') AS sale_date,
-		       COALESCE(SUM(o.total_amount_id_r), 0)::bigint AS revenue,
+		       COALESCE(SUM(o.total_amount_idr), 0)::bigint AS revenue,
 		       COUNT(*)::int AS orders
 		FROM orders o
 		WHERE o.branch_id = ?

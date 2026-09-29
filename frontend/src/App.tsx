@@ -13,6 +13,7 @@ import NewBusinessPage from './pages/dashboard/business/new';
 import { GuestRoute } from './components/GuestRoute';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import VerifyOtpPage from './pages/auth/verify-otp';
+import BusinessSetupPage from './pages/auth/business-setup';
 import BranchDashboard from './pages/dashboard/branch/index';
 import BranchLayout from './pages/dashboard/branch/layout';
 import BranchInventory from './pages/dashboard/branch/inventory/index';
@@ -565,6 +566,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route element={<ProtectedRoute />}>
+        <Route path="/onboarding" element={<BusinessSetupPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardIndex />} />

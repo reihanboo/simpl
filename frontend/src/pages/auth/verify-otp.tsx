@@ -1,18 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Package, ShieldCheck } from 'lucide-react';
+import { getAuthenticatedDestination } from '../../utils/auth-routing';
 
 export default function VerifyOtpPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const email = searchParams.get('email') || '';
-  
+  const otpInputRef = useRef<HTMLInputElement>(null);
+
   const [otpCode, setOtpCode] = useState('');
+  const [isOtpFocused, setIsOtpFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  const [localPart, domain] = email.split('@');
+  const maskedEmail = domain
+    ? `${localPart.slice(0, 1)}${'*'.repeat(Math.max(3, Math.min(localPart.length - 1, 5)))}@${domain}`
+    : email;
 
   useEffect(() => {
     if (!email) {
@@ -25,7 +33,7 @@ export default function VerifyOtpPage() {
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!otpCode || otpCode.length !== 6) {
+    if (!/^\d{6}$/.test(otpCode)) {
       setErrorMessage('Masukkan 6 digit kode OTP yang valid.');
       return;
     }
@@ -38,9 +46,9 @@ export default function VerifyOtpPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           email,
-          otp_code: otpCode 
+          otp_code: otpCode,
         }),
       });
 
@@ -50,13 +58,10 @@ export default function VerifyOtpPage() {
         throw new Error(data.error || 'Verifikasi gagal. Pastikan kode OTP benar.');
       }
 
-      // Automatically login user using the returned token
       localStorage.setItem('token', data.token);
-      
-      // Redirect to dashboard
-      navigate('/dashboard');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
+      navigate(await getAuthenticatedDestination(data.token), { replace: true });
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {
       setIsLoading(false);
     }
@@ -82,107 +87,159 @@ export default function VerifyOtpPage() {
         throw new Error(data.error || 'Gagal mengirim ulang OTP.');
       }
 
+      setOtpCode('');
       setSuccessMessage('Kode OTP baru telah dikirim ke email Anda.');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Terjadi kesalahan jaringan.');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
     } finally {
       setIsResending(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between relative overflow-hidden font-sans text-slate-900">
-      <div className="absolute top-0 left-0 w-full h-1 bg-[#21AC3A]" />
-      <div className="absolute top-12 left-10 w-96 h-96 bg-[#21AC3A]/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-96 h-96 bg-slate-200/50 rounded-full blur-3xl -z-10 pointer-events-none" />
-
-      <header className="p-6 max-w-7xl w-full mx-auto flex justify-between items-center">
-        <Link
-          to="/auth/login"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-[#21AC3A] transition-colors cursor-pointer"
+    <div className="flex min-h-screen flex-col items-center justify-between bg-[#F3F5F7] px-5 py-15 font-sans text-[#242424]">
+      <main className="my-auto flex w-full flex-1 items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className="w-full max-w-110 rounded border border-[#E0E0E0] bg-white p-7 shadow-[0_8px_32px_rgba(0,0,0,0.04)] sm:p-11"
         >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Kembali ke Login</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <img src="/simpl-logo-dark.png" alt="SIMPL Logo" className="h-6 object-contain" />
-        </div>
-      </header>
+          <div className="mb-7 flex items-center gap-2">
+            <img src="/simpl-logo-dark.png" alt="Simpl" className="h-6 w-auto object-contain" />
+          </div>
 
-      <main className="flex-1 flex items-center justify-center p-6 my-4">
-        <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden p-8 sm:p-12">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full"
-          >
-            <div className="mb-8 text-center">
-              <h1 className="text-2xl font-bold text-slate-900 mb-2">Verifikasi Email</h1>
-              <p className="text-slate-500 text-sm">
-                Kami telah mengirimkan 6-digit kode OTP ke <strong>{email}</strong>.
+          <div className="mb-7 flex flex-col gap-3">
+            <h1 className="text-2xl font-semibold leading-tight text-[#242424]">
+              Verifikasi identitas
+            </h1>
+            <p className="text-sm leading-normal text-[#605E5C]">
+              Untuk mengamankan akun Simpl Anda, masukkan kode 6 digit yang kami kirim ke{' '}
+              <strong className="font-semibold text-[#242424]">{maskedEmail}</strong>.
+            </p>
+          </div>
+
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              role="alert"
+              className="mb-5 border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+            >
+              {errorMessage}
+            </motion.div>
+          )}
+          {successMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              role="status"
+              className="mb-5 border border-[#B7E2BF] bg-[#EAF7EC] p-3 text-sm text-[#176B2A]"
+            >
+              {successMessage}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleVerifyOtp}>
+            <div className="mb-7 flex flex-col gap-2">
+              <label htmlFor="otp-code" className="text-[13px] font-semibold text-[#242424]">
+                Kode verifikasi
+              </label>
+              <div className="relative flex w-full justify-center gap-2 sm:gap-2.5" onClick={() => otpInputRef.current?.focus()}>
+                <input
+                  ref={otpInputRef}
+                  id="otp-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => {
+                    setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                    setErrorMessage('');
+                  }}
+                  onFocus={() => setIsOtpFocused(true)}
+                  onBlur={() => setIsOtpFocused(false)}
+                  aria-label="Kode verifikasi 6 digit"
+                  className="absolute inset-0 z-10 h-full w-full cursor-text opacity-0"
+                />
+                {Array.from({ length: 6 }, (_, index) => {
+                  const isActive = isOtpFocused && index === Math.min(otpCode.length, 5);
+                  return (
+                    <span
+                      key={index}
+                      aria-hidden="true"
+                      className={`relative flex h-13 min-w-0 max-w-11.5 flex-1 items-center justify-center rounded-sm border bg-white text-xl font-semibold text-[#242424] ${
+                        isActive ? 'border-2 border-[#21AC3A]' : 'border-[#D2D0CE]'
+                      }`}
+                    >
+                      {otpCode[index] || ''}
+                      {isActive && otpCode.length < 6 && (
+                        <span className="absolute h-4.5 w-px animate-pulse bg-[#21AC3A]" />
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-[#605E5C]">
+                Kode berlaku selama 10 menit. Periksa folder spam jika belum diterima.
               </p>
             </div>
 
-            {errorMessage && (
-              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold text-center">
-                {errorMessage}
-              </div>
-            )}
-            {successMessage && (
-              <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold text-center">
-                {successMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleVerifyOtp} className="space-y-6">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2 text-center">
-                  Kode Verifikasi (OTP)
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="000000"
-                  className="w-full text-center tracking-[0.5em] text-2xl py-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
-                />
-              </div>
-
-              <button
+            <div className="flex flex-col gap-5">
+              <motion.button
                 type="submit"
                 disabled={isLoading || otpCode.length !== 6}
-                className="w-full bg-[#21AC3A] hover:bg-[#1b8c2f] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-500/30 transition-all flex justify-center items-center h-[52px]"
+                whileHover={otpCode.length === 6 && !isLoading ? { y: -1 } : undefined}
+                whileTap={otpCode.length === 6 && !isLoading ? { scale: 0.99 } : undefined}
+                className="flex h-10 w-full items-center justify-center rounded-sm border border-[#21AC3A] bg-[#21AC3A] text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:border-[#D1D1D1] disabled:bg-[#E5E5E5] disabled:text-[#8A8886]"
               >
                 {isLoading ? (
-                  <motion.div
+                  <motion.span
+                    aria-label="Memverifikasi"
                     animate={{ rotate: 360 }}
                     transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                    className="h-5 w-5 border-2 border-white/40 border-t-white"
                   />
                 ) : (
-                  <span>Verifikasi & Masuk</span>
+                  'Verifikasi'
                 )}
-              </button>
-              
-              <div className="mt-6 text-center text-sm text-slate-500">
-                Belum menerima kode?{' '}
+              </motion.button>
+
+              <div className="flex items-center justify-between gap-3 text-[13px]">
                 <button
                   type="button"
                   onClick={handleResendOtp}
                   disabled={isResending}
-                  className="font-bold text-[#21AC3A] hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-left text-[#21AC3A] hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isResending ? 'Mengirim ulang...' : 'Kirim Ulang OTP'}
+                  {isResending ? 'Mengirim ulang...' : 'Kirim ulang kode'}
                 </button>
+                <Link to="/auth/login" className="text-right text-[#605E5C] hover:text-[#242424]">
+                  Kembali ke login
+                </Link>
               </div>
-            </form>
-          </motion.div>
-        </div>
+            </div>
+          </form>
+
+          <div className="mt-7 flex items-start gap-2 rounded bg-[#F3F5F7] p-3 text-xs leading-relaxed text-[#605E5C]">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#21AC3A]" />
+            <span>Jangan bagikan kode ini kepada siapa pun. Simpl tidak akan pernah memintanya.</span>
+          </div>
+        </motion.div>
       </main>
 
-      <footer className="p-6 text-center text-xs text-slate-500">
-        © {new Date().getFullYear()} SIMPL — Scalable Integrated Management System.
+      <footer className="flex w-full max-w-110 flex-col items-center gap-2 pt-6 text-center text-xs text-[#605E5C]">
+        <div className="flex items-center gap-1.5 font-semibold">
+          <Package className="h-3.5 w-3.5 text-[#21AC3A]" />
+          <span>Simpl</span>
+        </div>
+        <span>© {new Date().getFullYear()} Simpl. Hak cipta dilindungi.</span>
+        <div className="flex gap-4 pt-1">
+          <span>Ketentuan penggunaan</span>
+          <span>Privasi</span>
+        </div>
       </footer>
     </div>
   );

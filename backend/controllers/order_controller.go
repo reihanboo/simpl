@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"backend/config"
@@ -24,6 +25,10 @@ type CreateOrderInput struct {
 	Items         []OrderItemInput `json:"items" binding:"required,min=1"`
 	PaymentMethod string           `json:"payment_method" binding:"required"`
 	CustomerID    *uuid.UUID       `json:"customer_id"`
+}
+
+var supportedPaymentMethods = map[string]struct{}{
+	"cash": {}, "qris": {}, "debit": {}, "credit": {}, "transfer": {}, "ewallet": {},
 }
 
 func CreateOrder(c *gin.Context) {
@@ -60,8 +65,26 @@ func CreateOrder(c *gin.Context) {
 		utils.RespondError(c, http.StatusBadRequest, "Data input tidak valid: "+err.Error())
 		return
 	}
+	input.PaymentMethod = strings.ToLower(strings.TrimSpace(input.PaymentMethod))
+	if _, ok := supportedPaymentMethods[input.PaymentMethod]; !ok {
+		utils.RespondError(c, http.StatusBadRequest, "Metode pembayaran tidak didukung")
+		return
+	}
 
 	tx := config.DB.Begin()
+	if tx.Error != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memulai transaksi")
+		return
+	}
+
+	if input.CustomerID != nil {
+		var customer models.Customer
+		if err := tx.Where("id = ? AND business_id = ?", *input.CustomerID, branch.BusinessID).First(&customer).Error; err != nil {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusBadRequest, "Pelanggan tidak ditemukan")
+			return
+		}
+	}
 
 	// 1. Create the base Order record
 	orderNumber := fmt.Sprintf("ORD-%d", time.Now().Unix())

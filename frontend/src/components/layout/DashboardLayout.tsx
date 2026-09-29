@@ -9,6 +9,7 @@ import {
   Check,
   Plus,
   Settings,
+  ShieldCheck,
   LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,6 +31,8 @@ export default function DashboardLayout() {
   const [pendingPaymentOrgs, setPendingPaymentOrgs] = useState<any[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
+  const isDashboardHome = location.pathname === '/dashboard';
+  const isBranchRoute = location.pathname.startsWith('/dashboard/branch/');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -65,7 +68,7 @@ export default function DashboardLayout() {
         });
         if (resBusinesses.ok) {
           const dataBiz = await resBusinesses.json();
-          if (dataBiz.businesses && dataBiz.businesses.length > 0) {
+          if (Array.isArray(dataBiz.businesses) && dataBiz.businesses.length > 0) {
             const orgs = dataBiz.businesses.map((b: any) => ({
               id: b.id,
               name: b.name,
@@ -79,6 +82,8 @@ export default function DashboardLayout() {
             // Check if there is any pending payment
             const pendings = orgs.filter((o: any) => o.status === 'pending' && o.snapToken);
             setPendingPaymentOrgs(pendings);
+          } else {
+            navigate('/onboarding', { replace: true });
           }
         }
       } catch (error) {
@@ -86,7 +91,7 @@ export default function DashboardLayout() {
       }
     };
     fetchUser();
-  }, []);
+  }, [navigate]);
 
   const handlePayNow = (snapToken: string) => {
     if (window.snap) {
@@ -111,7 +116,7 @@ export default function DashboardLayout() {
   const getBreadcrumbs = () => {
     const rawPaths = location.pathname.split('/').filter(Boolean);
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    
+
     const breadcrumbs: { name: string, path: string }[] = [];
     let currentPath = '';
 
@@ -151,38 +156,46 @@ export default function DashboardLayout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="relative h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 z-50">
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center text-sm">
-              {getBreadcrumbs()}
-            </div>
+        <header className={`relative z-50 flex shrink-0 items-center justify-between px-3 sm:px-6 ${isDashboardHome ? 'h-14 border-b border-[#D1D1D1] bg-white' : 'h-16 border-b border-slate-200 bg-white'}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            {isDashboardHome ? (
+              <div className="flex shrink-0 items-center border-r border-[#D1D1D1] pr-3">
+                <img src="/simpl-logo-dark.png" alt="SIMPL" className="h-7 w-auto object-contain" />
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center text-sm">
+                {getBreadcrumbs()}
+              </div>
+            )}
 
             {/* Organization Selector */}
             {!location.pathname.startsWith('/dashboard/business/new') && !location.pathname.startsWith('/dashboard/branch/') && (
-              <div className="relative ml-4 border-l border-slate-200 pl-4">
+              <div className={`relative ${isDashboardHome ? 'ml-0' : 'ml-4 border-l border-slate-200 pl-4'}`}>
                 {activeOrg ? (
                   <button
                     onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                    className="flex items-center gap-2 hover:bg-slate-100 p-1.5 pr-2 rounded-lg transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
+                    className={`flex items-center gap-2 transition-colors cursor-pointer ${isDashboardHome ? 'bg-transparent px-3 py-1.5 text-slate-900 hover:bg-slate-100' : 'rounded-md border border-transparent p-1.5 pr-2 hover:border-slate-200 hover:bg-slate-100'}`}
                   >
-                    <div className="w-6 h-6 rounded bg-[#21AC3A] text-white flex items-center justify-center shrink-0">
-                      <Building2 className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-semibold text-sm text-slate-900">{activeOrg.name}</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-slate-300 text-slate-500 uppercase tracking-wider bg-slate-50">
+                    {!isDashboardHome && (
+                      <div className="w-6 h-6 rounded bg-[#21AC3A] text-white flex items-center justify-center shrink-0">
+                        <Building2 className="w-3.5 h-3.5" />
+                      </div>
+                    )}
+                    <span className={`truncate text-sm font-semibold ${isDashboardHome ? 'max-w-48 text-slate-900' : 'text-slate-900'}`}>{activeOrg.name}</span>
+                    {!isDashboardHome && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-slate-300 text-slate-500 uppercase tracking-wider bg-slate-50">
                       {activeOrg.plan}
-                    </span>
-                    {activeOrg.status === 'pending' && (
+                    </span>}
+                    {!isDashboardHome && activeOrg.status === 'pending' && (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-300 text-amber-600 bg-amber-50">
                         Tertunda
                       </span>
                     )}
-                    <ChevronsUpDown className="w-4 h-4 text-slate-400 ml-1" />
+                    <ChevronsUpDown className={`ml-1 h-4 w-4 ${isDashboardHome ? 'text-slate-400' : 'text-slate-400'}`} />
                   </button>
                 ) : (
                   <button
                     onClick={() => navigate('/dashboard/business/new')}
-                    className="flex items-center gap-2 hover:bg-slate-100 p-1.5 pr-2 rounded-lg transition-colors text-sm font-semibold text-slate-900"
+                    className={`flex items-center gap-2 rounded-md p-1.5 pr-2 text-sm font-semibold transition-colors ${isDashboardHome ? 'text-slate-900 hover:bg-slate-100' : 'text-slate-900 hover:bg-slate-100'}`}
                   >
                     <Plus className="w-4 h-4 text-[#21AC3A]" />
                     <span>Buat Bisnis Baru</span>
@@ -249,8 +262,8 @@ export default function DashboardLayout() {
             )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="relative hidden md:block">
+          <div className={`flex items-center ${isDashboardHome ? 'gap-2' : 'gap-4'}`}>
+            <div className={`relative ${isDashboardHome ? 'hidden' : 'hidden md:block'}`}>
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -260,12 +273,17 @@ export default function DashboardLayout() {
             </div>
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setIsNotificationDropdownOpen(!isNotificationDropdownOpen)}
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors relative cursor-pointer"
+                aria-label={pendingPaymentOrgs.length > 0 ? `Notifikasi pembayaran, ${pendingPaymentOrgs.length} belum dibayar` : 'Notifikasi pembayaran'}
+                aria-expanded={isNotificationDropdownOpen}
+                className={`relative p-2 transition-colors cursor-pointer ${isDashboardHome ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-500 hover:bg-slate-100'} ${isNotificationDropdownOpen ? 'bg-slate-100' : ''}`}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="h-5 w-5" />
                 {pendingPaymentOrgs.length > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center border-2 border-white bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
+                    {pendingPaymentOrgs.length > 9 ? '9+' : pendingPaymentOrgs.length}
+                  </span>
                 )}
               </button>
 
@@ -326,9 +344,19 @@ export default function DashboardLayout() {
             <div className="relative">
               <button
                 onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-                className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#21AC3A] to-emerald-400 text-white flex items-center justify-center font-bold text-sm cursor-pointer border-2 border-white shadow-sm ring-1 ring-slate-200"
+                className={`flex items-center transition-colors ${isDashboardHome ? 'gap-2 px-3 py-1.5 text-slate-900 hover:bg-slate-100' : 'h-8 w-8 justify-center rounded-full border-2 border-white bg-gradient-to-tr from-[#21AC3A] to-emerald-400 p-0 font-bold text-white ring-1 ring-slate-200'}`}
               >
-                {user ? user.name.charAt(0).toUpperCase() : ''}
+                {isDashboardHome ? (
+                  <>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                      {user ? user.name.charAt(0).toUpperCase() : ''}
+                    </span>
+                    <span className="hidden text-left sm:block">
+                      <span className="block max-w-36 truncate text-xs font-semibold leading-4">{user?.name || 'Memuat...'}</span>
+                      <span className="block max-w-36 truncate text-[10px] leading-3 text-slate-500">{user?.email || 'Akun'}</span>
+                    </span>
+                  </>
+                ) : user ? user.name.charAt(0).toUpperCase() : ''}
               </button>
 
               <AnimatePresence>
@@ -343,7 +371,7 @@ export default function DashboardLayout() {
                       className="absolute top-full right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-200/50 z-50 overflow-hidden"
                     >
                       <div className="px-4 py-3 border-b border-slate-100">
-                        <p className="text-sm font-medium text-slate-900">{user?.name || 'Loading...'}</p>
+                        <p className="text-sm font-medium text-slate-900">{user?.name || 'Memuat...'}</p>
                         <p className="text-xs text-slate-500 truncate">{user?.email || ''}</p>
                       </div>
                       <div className="p-1">
@@ -373,9 +401,18 @@ export default function DashboardLayout() {
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50/50">
+        <main className={`flex-1 overflow-y-auto ${isDashboardHome ? 'bg-[#F5F5F5]' : isBranchRoute ? 'bg-slate-50/50' : 'bg-slate-50/50 p-4 sm:p-6 lg:p-8'}`}>
           <Outlet context={{ activeOrg }} />
         </main>
+        {isDashboardHome && (
+          <footer className="flex h-9 shrink-0 items-center justify-between border-t border-[#D1D1D1] bg-[#F5F5F5] px-4 text-[10px] text-[#616161] sm:px-8">
+            <span>© {new Date().getFullYear()} SIMPL. Hak cipta dilindungi.</span>
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Lingkungan cloud aman
+            </span>
+          </footer>
+        )}
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ func main() {
 
 	// Connect to Database
 	config.ConnectDB()
+	config.ConnectAIDB()
 
 	r := gin.New()
 	r.Use(gin.Logger(), middlewares.ErrorRecovery())
@@ -113,6 +114,9 @@ func main() {
 			// Forecasting
 			branch.GET("/:id/forecast", controllers.GetStockForecast)
 			branch.GET("/:id/forecast/series", controllers.GetProductForecastSeries)
+
+			// AI assistant (DeepSeek over MCP)
+			branch.POST("/:id/chat", controllers.PostAIChat)
 		}
 	}
 

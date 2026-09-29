@@ -25,18 +25,6 @@ import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 
 // Types
-interface OrderItem {
-  id: string;
-  product_id: string;
-  qty: number;
-  unit_price_idr: number;
-  subtotal_idr: number;
-  Product?: {
-    name: string;
-    sku: string;
-  };
-}
-
 interface Order {
   id: string;
   order_number: string;
@@ -45,7 +33,7 @@ interface Order {
   payment_method: string;
   payment_status: string;
   created_at: string;
-  items: OrderItem[];
+  items_count: number;
 }
 
 interface SalesSummary {
@@ -94,6 +82,21 @@ const formatDate = (dateStr: string) => {
 };
 const printedAt = () => new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const todayStamp = () => new Date().toISOString().slice(0, 10);
+
+const getDefaultDateRange = () => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastDayOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0).getDate();
+  start.setDate(Math.min(today.getDate(), lastDayOfPreviousMonth));
+
+  const toDateInputValue = (date: Date) => [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  return { startDate: toDateInputValue(start), endDate: toDateInputValue(today) };
+};
 
 const BRAND_GREEN = 'FF21AC3A';
 const THIN_BORDER: Partial<ExcelJS.Borders> = {
@@ -275,12 +278,13 @@ export default function BranchReports() {
   const [activeTab, setActiveTab] = useState<'sales' | 'inventory' | 'movement'>('sales');
 
   // Sales state
+  const [defaultDateRange] = useState(getDefaultDateRange);
   const [orders, setOrders] = useState<Order[]>([]);
   const [salesSummary, setSalesSummary] = useState<SalesSummary | null>(null);
   const [salesLoading, setSalesLoading] = useState(true);
   const [salesSearch, setSalesSearch] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(defaultDateRange.startDate);
+  const [endDate, setEndDate] = useState(defaultDateRange.endDate);
 
   // Inventory state
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
@@ -448,7 +452,7 @@ export default function BranchReports() {
       body: filteredOrders.map(order => [
         order.order_number,
         formatDate(order.created_at),
-        order.items.length.toString(),
+        order.items_count.toString(),
         order.payment_method.toUpperCase(),
         formatIDR(order.total_amount_idr),
       ]),
@@ -571,7 +575,7 @@ export default function BranchReports() {
         rows: filteredOrders.map(order => [
           order.order_number,
           formatDate(order.created_at),
-          order.items.length,
+          order.items_count,
           order.payment_method.toUpperCase(),
           order.total_amount_idr,
         ]),
@@ -662,22 +666,22 @@ export default function BranchReports() {
   return (
     <>
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Laporan</h1>
-          <p className="text-slate-500">Pantau kinerja penjualan dan status inventori cabang Anda.</p>
+          <h1 className="text-2xl font-semibold text-slate-900 mb-1">Laporan</h1>
+          <p className="text-sm text-slate-500">Pantau kinerja penjualan dan status inventori cabang Anda.</p>
         </div>
         <div className="relative" ref={exportMenuRef}>
           <button
             onClick={() => setIsExportMenuOpen(open => !open)}
-            className="px-4 py-2 bg-[#21AC3A] hover:bg-[#1d9732] text-white rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2 bg-[#21AC3A] hover:bg-[#1d9732] text-white text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer"
           >
             <Download className="w-4 h-4" />
             Ekspor
             <ChevronDown className={`w-4 h-4 transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
           </button>
           {isExportMenuOpen && (
-            <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden z-20">
+            <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 shadow-lg overflow-hidden z-20">
               <button
                 onClick={() => { handleExportPDF(); setIsExportMenuOpen(false); }}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
@@ -699,40 +703,40 @@ export default function BranchReports() {
 
       {/* Summary Cards */}
       {activeTab === 'sales' && salesSummary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <ShoppingCart className="w-6 h-6" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-slate-50 text-slate-600">
+              <ShoppingCart className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Total Transaksi</p>
+              <p className="text-xs font-medium text-slate-500">Total Transaksi</p>
               <h3 className="text-2xl font-bold text-slate-900">{salesSummary.total_orders}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <DollarSign className="w-6 h-6" />
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-green-50 text-[#21AC3A]">
+              <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Total Pendapatan</p>
+              <p className="text-xs font-medium text-slate-500">Total Pendapatan</p>
               <h3 className="text-2xl font-bold text-slate-900">{formatIDR(salesSummary.total_revenue)}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-              <BarChart3 className="w-6 h-6" />
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-amber-50 text-amber-700">
+              <BarChart3 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Item Terjual</p>
+              <p className="text-xs font-medium text-slate-500">Item Terjual</p>
               <h3 className="text-2xl font-bold text-slate-900">{salesSummary.total_items_sold}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-violet-50 text-violet-600 rounded-xl">
-              <TrendingUp className="w-6 h-6" />
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-slate-50 text-slate-600">
+              <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Rata-rata / Transaksi</p>
+              <p className="text-xs font-medium text-slate-500">Rata-rata / Transaksi</p>
               <h3 className="text-2xl font-bold text-slate-900">
                 {salesSummary.total_orders > 0
                   ? formatIDR(Math.round(salesSummary.total_revenue / salesSummary.total_orders))
@@ -744,40 +748,40 @@ export default function BranchReports() {
       )}
 
       {activeTab === 'inventory' && inventorySummary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <Package className="w-6 h-6" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-slate-50 text-slate-600">
+              <Package className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Total Produk</p>
+              <p className="text-xs font-medium text-slate-500">Total Produk</p>
               <h3 className="text-2xl font-bold text-slate-900">{inventorySummary.total_products}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <DollarSign className="w-6 h-6" />
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-green-50 text-[#21AC3A]">
+              <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Nilai Stok (Jual)</p>
+              <p className="text-xs font-medium text-slate-500">Nilai Stok (Jual)</p>
               <h3 className="text-2xl font-bold text-slate-900">{formatIDR(inventorySummary.total_stock_value_selling)}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-              <AlertCircle className="w-6 h-6" />
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-amber-50 text-amber-700">
+              <AlertCircle className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Stok Menipis</p>
+              <p className="text-xs font-medium text-slate-500">Stok Menipis</p>
               <h3 className="text-2xl font-bold text-slate-900">{inventorySummary.low_stock_count}</h3>
             </div>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-            <div className="p-3 bg-red-50 text-red-600 rounded-xl">
-              <PackageOpen className="w-6 h-6" />
+          <div className="bg-white p-4 border border-slate-200 flex items-center gap-3">
+            <div className="p-2.5 bg-red-50 text-red-700">
+              <PackageOpen className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Stok Habis</p>
+              <p className="text-xs font-medium text-slate-500">Stok Habis</p>
               <h3 className="text-2xl font-bold text-slate-900">{inventorySummary.out_of_stock_count}</h3>
             </div>
           </div>
@@ -785,43 +789,34 @@ export default function BranchReports() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-slate-200 mb-6">
+      <div className="flex items-center overflow-x-auto border border-slate-200 bg-white mb-4">
         <button
           onClick={() => setActiveTab('sales')}
-          className={`pb-3 font-semibold text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'sales' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+          className={`shrink-0 px-4 py-3 font-medium text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'sales' ? 'bg-green-50 text-[#21AC3A]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
         >
           <TrendingUp className="w-4 h-4" />
           Laporan Penjualan
-          {activeTab === 'sales' && (
-            <motion.div layoutId="report-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
-          )}
         </button>
         <button
           onClick={() => setActiveTab('movement')}
-          className={`pb-3 font-semibold text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'movement' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+          className={`shrink-0 px-4 py-3 font-medium text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'movement' ? 'bg-green-50 text-[#21AC3A]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
         >
           <Activity className="w-4 h-4" />
           Pergerakan Stok
-          {activeTab === 'movement' && (
-            <motion.div layoutId="report-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
-          )}
         </button>
         <button
           onClick={() => setActiveTab('inventory')}
-          className={`pb-3 font-semibold text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'inventory' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+          className={`shrink-0 px-4 py-3 font-medium text-sm transition-colors relative flex items-center gap-2 cursor-pointer ${activeTab === 'inventory' ? 'bg-green-50 text-[#21AC3A]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
         >
           <Package className="w-4 h-4" />
           Laporan Inventori
-          {activeTab === 'inventory' && (
-            <motion.div layoutId="report-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#21AC3A] rounded-t-full" />
-          )}
         </button>
       </div>
 
-      {/* Table Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between gap-4">
+      {/* Report data */}
+      <div className="bg-white border border-slate-200 overflow-hidden flex flex-col">
+        {/* Filters */}
+        <div className="p-3 border-b border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div className="relative w-full sm:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -833,7 +828,7 @@ export default function BranchReports() {
                 else if (activeTab === 'inventory') setInventorySearch(e.target.value);
                 else setMovementSearch(e.target.value);
               }}
-              className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
+              className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-300 focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
             />
           </div>
           <div className="flex items-center gap-3">
@@ -845,20 +840,20 @@ export default function BranchReports() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[#21AC3A] transition-all"
+                    className="bg-white border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-[#21AC3A] transition-all"
                   />
                   <span className="text-slate-400">—</span>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-[#21AC3A] transition-all"
+                    className="bg-white border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-[#21AC3A] transition-all"
                   />
                 </div>
               </>
             )}
             {activeTab === 'inventory' && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
+              <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 text-sm text-slate-700">
                 <Filter className="w-4 h-4 text-slate-400" />
                 <select
                   className="bg-transparent outline-none cursor-pointer"
@@ -881,12 +876,12 @@ export default function BranchReports() {
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">No. Order</th>
-                  <th className="px-6 py-4 font-semibold">Tanggal & Waktu</th>
-                  <th className="px-6 py-4 font-semibold">Jumlah Item</th>
-                  <th className="px-6 py-4 font-semibold">Pembayaran</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold text-right">Total</th>
+                  <th className="px-4 py-3 font-semibold">No. Order</th>
+                  <th className="px-4 py-3 font-semibold">Tanggal & Waktu</th>
+                  <th className="px-4 py-3 font-semibold">Jumlah Item</th>
+                  <th className="px-4 py-3 font-semibold">Pembayaran</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -915,30 +910,30 @@ export default function BranchReports() {
                       key={order.id}
                       className="hover:bg-slate-50/50 transition-colors"
                     >
-                      <td className="px-6 py-4">
-                        <span className="font-bold text-slate-900 font-mono text-xs bg-slate-100 px-2 py-1 rounded-md">
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-slate-900 font-mono text-xs bg-slate-100 px-2 py-1">
                           {order.order_number}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-slate-500 font-medium">
+                      <td className="px-4 py-3 text-slate-500 font-medium">
                         {formatDate(order.created_at)}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-slate-700">{order.items?.length || 0} item</span>
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-slate-700">{order.items_count} item</span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
                           {order.payment_method}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${
                           order.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                         }`}>
                           {order.payment_status === 'paid' ? 'Lunas' : 'Refund'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         <span className="font-bold text-slate-900">{formatIDR(order.total_amount_idr)}</span>
                       </td>
                     </motion.tr>
@@ -950,14 +945,14 @@ export default function BranchReports() {
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">SKU</th>
-                  <th className="px-6 py-4 font-semibold">Produk</th>
-                  <th className="px-6 py-4 font-semibold">Sisa Stok</th>
-                  <th className="px-6 py-4 font-semibold">Harga Modal</th>
-                  <th className="px-6 py-4 font-semibold">Harga Jual</th>
-                  <th className="px-6 py-4 font-semibold">Nilai Stok (Modal)</th>
-                  <th className="px-6 py-4 font-semibold">Nilai Stok (Jual)</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">SKU</th>
+                  <th className="px-4 py-3 font-semibold">Produk</th>
+                  <th className="px-4 py-3 font-semibold">Sisa Stok</th>
+                  <th className="px-4 py-3 font-semibold">Harga Modal</th>
+                  <th className="px-4 py-3 font-semibold">Harga Jual</th>
+                  <th className="px-4 py-3 font-semibold">Nilai Stok (Modal)</th>
+                  <th className="px-4 py-3 font-semibold">Nilai Stok (Jual)</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -986,29 +981,29 @@ export default function BranchReports() {
                       key={item.product_id}
                       className="hover:bg-slate-50/50 transition-colors"
                     >
-                      <td className="px-6 py-4 text-slate-500 font-mono font-medium text-xs">
+                      <td className="px-4 py-3 text-slate-500 font-mono font-medium text-xs">
                         {item.sku}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <p className="font-semibold text-slate-900">{item.product_name}</p>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <span className="font-bold text-slate-900">{item.current_stock}</span>
                       </td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">
+                      <td className="px-4 py-3 text-slate-600 font-medium">
                         {formatIDR(item.cost_price_idr)}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-slate-700">
+                      <td className="px-4 py-3 font-semibold text-slate-700">
                         {formatIDR(item.selling_price_idr)}
                       </td>
-                      <td className="px-6 py-4 text-slate-600 font-medium">
+                      <td className="px-4 py-3 text-slate-600 font-medium">
                         {formatIDR(item.stock_value_cost)}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-slate-700">
+                      <td className="px-4 py-3 font-semibold text-slate-700">
                         {formatIDR(item.stock_value_selling)}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${
                           item.status === 'Aman' ? 'bg-emerald-100 text-emerald-700' :
                           item.status === 'Menipis' ? 'bg-amber-100 text-amber-700' :
                           'bg-red-100 text-red-700'
@@ -1025,12 +1020,12 @@ export default function BranchReports() {
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                 <tr>
-                  <th className="px-6 py-4 font-semibold">Tanggal & Waktu</th>
-                  <th className="px-6 py-4 font-semibold">SKU</th>
-                  <th className="px-6 py-4 font-semibold">Produk</th>
-                  <th className="px-6 py-4 font-semibold">Tipe</th>
-                  <th className="px-6 py-4 font-semibold">Qty</th>
-                  <th className="px-6 py-4 font-semibold">Keterangan</th>
+                  <th className="px-4 py-3 font-semibold">Tanggal & Waktu</th>
+                  <th className="px-4 py-3 font-semibold">SKU</th>
+                  <th className="px-4 py-3 font-semibold">Produk</th>
+                  <th className="px-4 py-3 font-semibold">Tipe</th>
+                  <th className="px-4 py-3 font-semibold">Qty</th>
+                  <th className="px-4 py-3 font-semibold">Keterangan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1058,17 +1053,17 @@ export default function BranchReports() {
                       key={m.id}
                       className="hover:bg-slate-50/50 transition-colors"
                     >
-                      <td className="px-6 py-4 text-slate-500 font-medium">
+                      <td className="px-4 py-3 text-slate-500 font-medium">
                         {m.date}
                       </td>
-                      <td className="px-6 py-4 text-slate-500 font-mono text-xs">
+                      <td className="px-4 py-3 text-slate-500 font-mono text-xs">
                         {m.sku}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <span className="font-semibold text-slate-900">{m.name}</span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-1 text-xs font-bold uppercase tracking-wider ${
                           m.type === 'in' ? 'bg-blue-100 text-blue-700' :
                           m.type === 'out' ? 'bg-amber-100 text-amber-700' :
                           'bg-slate-100 text-slate-700'
@@ -1076,12 +1071,12 @@ export default function BranchReports() {
                           {m.type === 'in' ? 'Masuk' : m.type === 'out' ? 'Keluar' : 'Penyesuaian'}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-3">
                         <span className={`font-bold ${m.qty > 0 ? 'text-blue-600' : m.qty < 0 ? 'text-amber-600' : 'text-slate-600'}`}>
                           {m.qty > 0 ? `+${m.qty}` : m.qty}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-slate-500">
+                      <td className="px-4 py-3 text-slate-500">
                         {m.reason}
                       </td>
                     </motion.tr>
@@ -1093,7 +1088,7 @@ export default function BranchReports() {
         </div>
 
         {/* Pagination */}
-        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+        <div className="p-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
           <div className="flex items-center gap-3">
             <span className="whitespace-nowrap">Tampilkan:</span>
             <select
@@ -1102,7 +1097,7 @@ export default function BranchReports() {
                 setItemsPerPage(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-[#21AC3A]"
+              className="bg-white border border-slate-300 px-2 py-1 outline-none focus:border-[#21AC3A]"
             >
               <option value={10}>10</option>
               <option value={20}>20</option>
@@ -1117,15 +1112,15 @@ export default function BranchReports() {
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="px-3 py-1 border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
             >
               Sebelumnya
             </button>
-            <button className="px-3 py-1 bg-[#21AC3A] text-white rounded">{currentPage}</button>
+            <button className="px-3 py-1 bg-[#21AC3A] text-white">{currentPage}</button>
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages || totalPages === 0}
-              className="px-3 py-1 border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
+              className="px-3 py-1 border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-transparent"
             >
               Selanjutnya
             </button>
