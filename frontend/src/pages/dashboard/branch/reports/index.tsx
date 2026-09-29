@@ -25,18 +25,6 @@ import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 
 // Types
-interface OrderItem {
-  id: string;
-  product_id: string;
-  qty: number;
-  unit_price_idr: number;
-  subtotal_idr: number;
-  Product?: {
-    name: string;
-    sku: string;
-  };
-}
-
 interface Order {
   id: string;
   order_number: string;
@@ -45,7 +33,7 @@ interface Order {
   payment_method: string;
   payment_status: string;
   created_at: string;
-  items: OrderItem[];
+  items_count: number;
 }
 
 interface SalesSummary {
@@ -464,7 +452,7 @@ export default function BranchReports() {
       body: filteredOrders.map(order => [
         order.order_number,
         formatDate(order.created_at),
-        order.items.length.toString(),
+        order.items_count.toString(),
         order.payment_method.toUpperCase(),
         formatIDR(order.total_amount_idr),
       ]),
@@ -587,7 +575,7 @@ export default function BranchReports() {
         rows: filteredOrders.map(order => [
           order.order_number,
           formatDate(order.created_at),
-          order.items.length,
+          order.items_count,
           order.payment_method.toUpperCase(),
           order.total_amount_idr,
         ]),
@@ -931,7 +919,7 @@ export default function BranchReports() {
                         {formatDate(order.created_at)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-semibold text-slate-700">{order.items?.length || 0} item</span>
+                        <span className="font-semibold text-slate-700">{order.items_count} item</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center px-2.5 py-1 text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
