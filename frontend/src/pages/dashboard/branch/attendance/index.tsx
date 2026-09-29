@@ -52,22 +52,15 @@ interface BranchLocation {
   latitude: number | null;
   longitude: number | null;
   geofence_radius_m: number;
+  timezone: string;
 }
 
-const todayLabel = new Intl.DateTimeFormat('id-ID', {
-  timeZone: 'Asia/Jakarta',
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-}).format(new Date());
-
-function formatClock(value: string | null) {
+function formatClock(value: string | null, timezone: string) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('id-ID', {
-    timeZone: 'Asia/Jakarta',
+    timeZone: timezone,
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
@@ -122,6 +115,14 @@ export default function AttendanceIndex() {
   const [workingEmployeeId, setWorkingEmployeeId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const timezone = branch?.timezone || 'Asia/Jakarta';
+  const todayLabel = new Intl.DateTimeFormat('id-ID', {
+    timeZone: timezone,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date());
 
   useEffect(() => {
     if (!branchId) return;
@@ -264,9 +265,10 @@ export default function AttendanceIndex() {
               ) : (
                 <div>
                   <p className="mt-1 text-sm text-amber-700">Lokasi cabang belum diatur. Atur titik dan radius geofence melalui daftar cabang sebelum clock-in/out.</p>
-                  <Link to="/dashboard" className="mt-2 inline-flex text-sm font-semibold text-emerald-700 hover:underline">Buka daftar cabang</Link>
+                  <Link to={branchId ? `/dashboard?editBranch=${encodeURIComponent(branchId)}` : '/dashboard'} className="mt-2 inline-flex text-sm font-semibold text-emerald-700 hover:underline">Atur lokasi cabang</Link>
                 </div>
               )}
+              <p className="mt-1 text-xs text-slate-500">Zona waktu cabang: {branch?.timezone || 'Asia/Jakarta'}</p>
             </div>
           </div>
           {geofenceReady && (
@@ -301,8 +303,8 @@ export default function AttendanceIndex() {
                   <tr key={employee.id} className="hover:bg-slate-50/70">
                     <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-800">{employee.name}</p><p className="mt-1 text-xs text-slate-500">{employee.role}</p></td>
                     <td className="px-4 py-4 text-sm text-slate-600">{employee.shift}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatClock(employee.clockIn)}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{formatClock(employee.clockOut)}</td>
+                    <td className="px-4 py-4 text-sm text-slate-700">{formatClock(employee.clockIn, timezone)}</td>
+                    <td className="px-4 py-4 text-sm text-slate-700">{formatClock(employee.clockOut, timezone)}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${!hasClockedIn ? 'text-slate-500' : employee.attendanceStatus === 'Terlambat' ? 'text-amber-700' : 'text-emerald-700'}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${!hasClockedIn ? 'bg-slate-300' : employee.attendanceStatus === 'Terlambat' ? 'bg-amber-500' : 'bg-emerald-500'}`} />

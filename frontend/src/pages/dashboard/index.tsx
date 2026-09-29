@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { Map, Marker } from 'pigeon-maps';
 import {
   Search,
@@ -21,6 +21,7 @@ interface BranchRecord {
   latitude?: number | null;
   longitude?: number | null;
   geofence_radius_m?: number;
+  timezone?: string;
 }
 
 interface DashboardOrganization {
@@ -39,6 +40,8 @@ const formatPlanName = (plan?: string) => {
 export default function DashboardIndex() {
   const { activeOrg } = useOutletContext<{ activeOrg: DashboardOrganization }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const branchToEditFromUrl = useRef(searchParams.get('editBranch'));
   const [branches, setBranches] = useState<BranchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,12 +63,28 @@ export default function DashboardIndex() {
   const [mapZoom, setMapZoom] = useState(13);
   const [hasBranchLocation, setHasBranchLocation] = useState(false);
   const [geofenceRadius, setGeofenceRadius] = useState(100);
+  const [branchTimezone, setBranchTimezone] = useState('Asia/Jakarta');
 
   const isPending = activeOrg?.status === 'pending';
   const filteredBranches = branches.filter((branch) => {
     const query = searchQuery.trim().toLowerCase();
     return !query || `${branch.name} ${branch.address || ''}`.toLowerCase().includes(query);
   });
+
+  const openEditModal = useCallback((branch: BranchRecord) => {
+    setEditingBranch(branch);
+    setNewBranchName(branch.name);
+    setNewBranchAddress(branch.address || '');
+    setBranchTimezone(branch.timezone || 'Asia/Jakarta');
+    const hasLocation = branch.latitude != null && branch.longitude != null;
+    setHasBranchLocation(hasLocation);
+    if (branch.latitude != null && branch.longitude != null) {
+      setMapCenter([branch.latitude, branch.longitude]);
+      setMapZoom(16);
+    }
+    setGeofenceRadius(branch.geofence_radius_m || 100);
+    setIsModalOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!activeOrg?.id) return;
@@ -81,7 +100,19 @@ export default function DashboardIndex() {
         });
         if (res.ok) {
           const data = await res.json();
-          setBranches(data.branches || []);
+          const loadedBranches: BranchRecord[] = data.branches || [];
+          setBranches(loadedBranches);
+          const branchIdToEdit = branchToEditFromUrl.current;
+          const branchToEdit = loadedBranches.find((branch) => branch.id === branchIdToEdit);
+          if (branchToEdit) {
+            openEditModal(branchToEdit);
+            branchToEditFromUrl.current = null;
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current);
+              next.delete('editBranch');
+              return next;
+            }, { replace: true });
+          }
         } else {
           console.error("Failed to fetch branches");
         }
@@ -93,7 +124,7 @@ export default function DashboardIndex() {
     };
 
     fetchBranches();
-  }, [activeOrg?.id]);
+  }, [activeOrg?.id, openEditModal, setSearchParams]);
 
   useEffect(() => {
     if (!isResizingSidebar) return;
@@ -179,7 +210,8 @@ export default function DashboardIndex() {
           address: newBranchAddress,
           latitude: hasBranchLocation ? mapCenter[0] : null,
           longitude: hasBranchLocation ? mapCenter[1] : null,
-          geofence_radius_m: geofenceRadius
+          geofence_radius_m: geofenceRadius,
+          timezone: branchTimezone
         })
       });
 
@@ -193,6 +225,7 @@ export default function DashboardIndex() {
         setIsModalOpen(false);
         setNewBranchName('');
         setNewBranchAddress('');
+        setBranchTimezone('Asia/Jakarta');
         setEditingBranch(null);
       } else {
         console.error("Failed to save branch");
@@ -208,24 +241,13 @@ export default function DashboardIndex() {
     setEditingBranch(null);
     setNewBranchName('');
     setNewBranchAddress('');
+    setBranchTimezone('Asia/Jakarta');
     setHasBranchLocation(false);
     setGeofenceRadius(100);
     setIsModalOpen(true);
   };
 
-  const openEditModal = (branch: BranchRecord) => {
-    setEditingBranch(branch);
-    setNewBranchName(branch.name);
-    setNewBranchAddress(branch.address || '');
-    const hasLocation = branch.latitude != null && branch.longitude != null;
-    setHasBranchLocation(hasLocation);
-    if (branch.latitude != null && branch.longitude != null) {
-      setMapCenter([branch.latitude, branch.longitude]);
-      setMapZoom(16);
-    }
-    setGeofenceRadius(branch.geofence_radius_m || 100);
-    setIsModalOpen(true);
-  };
+
 
   const handleDeleteBranch = async () => {
     if (!branchToDelete || isDeletingBranch) return;
@@ -553,6 +575,20 @@ export default function DashboardIndex() {
                       onChange={(event) => setGeofenceRadius(Number(event.target.value) || 100)}
                       className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                     />
+                  </label>
+                  <label htmlFor="branch-timezone" className="mt-4 block text-sm font-semibold text-slate-700">
+                    Zona waktu cabang
+                    <select
+                      id="branch-timezone"
+                      value={branchTimezone}
+                      onChange={(event) => setBranchTimezone(event.target.value)}
+                      className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
+                    >
+                      <option value="Asia/Jakarta">WIB — Asia/Jakarta (UTC+7)</option>
+                      <option value="Asia/Makassar">WITA — Asia/Makassar (UTC+8)</option>
+                      <option value="Asia/Jayapura">WIT — Asia/Jayapura (UTC+9)</option>
+                    </select>
+                    <span className="mt-1.5 block text-xs font-normal text-slate-500">Dipakai untuk tanggal presensi, status keterlambatan, dan tampilan jam.</span>
                   </label>
                 </div>
 

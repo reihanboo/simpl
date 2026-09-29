@@ -27,7 +27,7 @@ type EmployeeAttendance struct {
 	BusinessID        uuid.UUID  `gorm:"type:uuid;not null;index" json:"business_id"`
 	BranchID          uuid.UUID  `gorm:"type:uuid;not null;index" json:"branch_id"`
 	EmployeeID        uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_employee_attendance_day" json:"employee_id"`
-	AttendanceDate    time.Time  `gorm:"type:date;not null;uniqueIndex:idx_employee_attendance_day" json:"attendance_date"`
+	AttendanceDate    string     `gorm:"type:date;not null;uniqueIndex:idx_employee_attendance_day" json:"attendance_date"`
 	ClockIn           *time.Time `json:"clock_in"`
 	ClockOut          *time.Time `json:"clock_out"`
 	ClockInLatitude   *float64   `gorm:"type:double precision" json:"clock_in_latitude"`
