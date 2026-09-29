@@ -6,6 +6,7 @@ import (
 	"backend/utils"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -37,6 +38,7 @@ func CreateBranch(c *gin.Context) {
 		Latitude        *float64 `json:"latitude"`
 		Longitude       *float64 `json:"longitude"`
 		GeofenceRadiusM *int     `json:"geofence_radius_m"`
+		Timezone        string   `json:"timezone"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -60,6 +62,11 @@ func CreateBranch(c *gin.Context) {
 		BusinessID: businessUUID,
 		Name:       input.Name,
 		Address:    input.Address,
+	}
+	if err := applyBranchTimezone(&branch, input.Timezone, true); err != nil {
+		tx.Rollback()
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
 	}
 	if err := applyBranchLocation(&branch, input.Latitude, input.Longitude, input.GeofenceRadiusM, true); err != nil {
 		tx.Rollback()
@@ -116,6 +123,7 @@ func UpdateBranch(c *gin.Context) {
 		Latitude        *float64 `json:"latitude"`
 		Longitude       *float64 `json:"longitude"`
 		GeofenceRadiusM *int     `json:"geofence_radius_m"`
+		Timezone        string   `json:"timezone"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -131,6 +139,10 @@ func UpdateBranch(c *gin.Context) {
 
 	branch.Name = input.Name
 	branch.Address = input.Address
+	if err := applyBranchTimezone(&branch, input.Timezone, false); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := applyBranchLocation(&branch, input.Latitude, input.Longitude, input.GeofenceRadiusM, false); err != nil {
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
@@ -145,6 +157,21 @@ func UpdateBranch(c *gin.Context) {
 		"branch":  branch,
 		"message": "Cabang berhasil diperbarui",
 	})
+}
+
+func applyBranchTimezone(branch *models.Branch, timezone string, isCreate bool) error {
+	timezone = strings.TrimSpace(timezone)
+	if timezone == "" {
+		if isCreate || branch.Timezone == "" {
+			branch.Timezone = utils.DefaultTimezone
+		}
+		return nil
+	}
+	if _, err := utils.LoadTimezone(timezone); err != nil {
+		return fmt.Errorf("Zona waktu cabang tidak valid.")
+	}
+	branch.Timezone = timezone
+	return nil
 }
 
 func applyBranchLocation(branch *models.Branch, latitude, longitude *float64, radius *int, isCreate bool) error {

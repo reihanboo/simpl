@@ -21,6 +21,7 @@ interface BranchRecord {
   latitude?: number | null;
   longitude?: number | null;
   geofence_radius_m?: number;
+  timezone?: string;
 }
 
 interface DashboardOrganization {
@@ -60,6 +61,7 @@ export default function DashboardIndex() {
   const [mapZoom, setMapZoom] = useState(13);
   const [hasBranchLocation, setHasBranchLocation] = useState(false);
   const [geofenceRadius, setGeofenceRadius] = useState(100);
+  const [branchTimezone, setBranchTimezone] = useState('Asia/Jakarta');
 
   const isPending = activeOrg?.status === 'pending';
   const filteredBranches = branches.filter((branch) => {
@@ -179,7 +181,8 @@ export default function DashboardIndex() {
           address: newBranchAddress,
           latitude: hasBranchLocation ? mapCenter[0] : null,
           longitude: hasBranchLocation ? mapCenter[1] : null,
-          geofence_radius_m: geofenceRadius
+          geofence_radius_m: geofenceRadius,
+          timezone: branchTimezone
         })
       });
 
@@ -193,6 +196,7 @@ export default function DashboardIndex() {
         setIsModalOpen(false);
         setNewBranchName('');
         setNewBranchAddress('');
+        setBranchTimezone('Asia/Jakarta');
         setEditingBranch(null);
       } else {
         console.error("Failed to save branch");
@@ -208,6 +212,7 @@ export default function DashboardIndex() {
     setEditingBranch(null);
     setNewBranchName('');
     setNewBranchAddress('');
+    setBranchTimezone('Asia/Jakarta');
     setHasBranchLocation(false);
     setGeofenceRadius(100);
     setIsModalOpen(true);
@@ -217,6 +222,7 @@ export default function DashboardIndex() {
     setEditingBranch(branch);
     setNewBranchName(branch.name);
     setNewBranchAddress(branch.address || '');
+    setBranchTimezone(branch.timezone || 'Asia/Jakarta');
     const hasLocation = branch.latitude != null && branch.longitude != null;
     setHasBranchLocation(hasLocation);
     if (branch.latitude != null && branch.longitude != null) {
@@ -553,6 +559,20 @@ export default function DashboardIndex() {
                       onChange={(event) => setGeofenceRadius(Number(event.target.value) || 100)}
                       className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                     />
+                  </label>
+                  <label htmlFor="branch-timezone" className="mt-4 block text-sm font-semibold text-slate-700">
+                    Zona waktu cabang
+                    <select
+                      id="branch-timezone"
+                      value={branchTimezone}
+                      onChange={(event) => setBranchTimezone(event.target.value)}
+                      className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-normal outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
+                    >
+                      <option value="Asia/Jakarta">WIB — Asia/Jakarta (UTC+7)</option>
+                      <option value="Asia/Makassar">WITA — Asia/Makassar (UTC+8)</option>
+                      <option value="Asia/Jayapura">WIT — Asia/Jayapura (UTC+9)</option>
+                    </select>
+                    <span className="mt-1.5 block text-xs font-normal text-slate-500">Dipakai untuk tanggal presensi, status keterlambatan, dan tampilan jam.</span>
                   </label>
                 </div>
 

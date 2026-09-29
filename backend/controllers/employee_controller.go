@@ -33,8 +33,6 @@ var (
 	errLocationInvalid     = errors.New("koordinat atau akurasi lokasi tidak valid")
 )
 
-var jakartaLocation = time.FixedZone("WIB", 7*60*60)
-
 type employeeInput struct {
 	Name   string `json:"name" binding:"required,max=255"`
 	Email  string `json:"email" binding:"required,email,max=100"`
@@ -67,6 +65,17 @@ func GetEmployees(c *gin.Context) {
 		return
 	}
 
+	var branch models.Branch
+	if err := config.DB.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat lokasi cabang.")
+		return
+	}
+	branchLocation, err := utils.LoadTimezone(branch.Timezone)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Zona waktu cabang tidak valid.")
+		return
+	}
+
 	var employees []models.Employee
 	if err := config.DB.Where("business_id = ? AND branch_id = ?", businessID, branchID).
 		Order("created_at DESC").Find(&employees).Error; err != nil {
@@ -74,7 +83,7 @@ func GetEmployees(c *gin.Context) {
 		return
 	}
 
-	today := jakartaDate(time.Now())
+	today := attendanceDateAt(time.Now(), branchLocation)
 	var attendanceRecords []models.EmployeeAttendance
 	if err := config.DB.Where("business_id = ? AND branch_id = ? AND attendance_date = ?", businessID, branchID, today).
 		Find(&attendanceRecords).Error; err != nil {
@@ -101,11 +110,6 @@ func GetEmployees(c *gin.Context) {
 			response.ClockOutLongitude = attendance.ClockOutLongitude
 		}
 		data = append(data, response)
-	}
-	var branch models.Branch
-	if err := config.DB.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
-		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat lokasi cabang.")
-		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data, "branch": branch})
 }
@@ -198,9 +202,19 @@ func UpdateEmployee(c *gin.Context) {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat data pegawai yang diperbarui.")
 		return
 	}
+	var branch models.Branch
+	if err := config.DB.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat lokasi cabang.")
+		return
+	}
+	branchLocation, err := utils.LoadTimezone(branch.Timezone)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Zona waktu cabang tidak valid.")
+		return
+	}
 	var attendance models.EmployeeAttendance
 	attendancePointer := (*models.EmployeeAttendance)(nil)
-	if err := config.DB.Where("employee_id = ? AND attendance_date = ?", employeeID, jakartaDate(time.Now())).First(&attendance).Error; err == nil {
+	if err := config.DB.Where("employee_id = ? AND attendance_date = ?", employeeID, attendanceDateAt(time.Now(), branchLocation)).First(&attendance).Error; err == nil {
 		attendancePointer = &attendance
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat kehadiran hari ini.")
@@ -246,14 +260,18 @@ func ClockInEmployee(c *gin.Context) {
 		return
 	}
 
-	now := time.Now().In(jakartaLocation)
-	date := jakartaDate(now)
+	now := time.Now().UTC()
 	var attendance models.EmployeeAttendance
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
 		var branch models.Branch
 		if err := tx.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
 			return errBranchLocationUnset
 		}
+		branchLocation, err := utils.LoadTimezone(branch.Timezone)
+		if err != nil {
+			return err
+		}
+		date := attendanceDateAt(now, branchLocation)
 		if _, err := validateAttendanceLocation(branch, location); err != nil {
 			return err
 		}
@@ -274,7 +292,7 @@ func ClockInEmployee(c *gin.Context) {
 			return errEmployeeUnscheduled
 		}
 
-		err := tx.Where("employee_id = ? AND attendance_date = ?", employeeID, date).First(&attendance).Error
+		err = tx.Where("employee_id = ? AND attendance_date = ?", employeeID, date).First(&attendance).Error
 		if err == nil && attendance.ClockIn != nil {
 			return errAlreadyClockedIn
 		}
@@ -294,7 +312,7 @@ func ClockInEmployee(c *gin.Context) {
 		attendance.ClockInLatitude = location.Latitude
 		attendance.ClockInLongitude = location.Longitude
 		attendance.ClockInAccuracyM = location.AccuracyM
-		attendance.Status = employeeAttendanceStatus(employee.Shift, now)
+		attendance.Status = employeeAttendanceStatus(employee.Shift, now, branchLocation)
 		if attendance.ID == uuid.Nil {
 			return tx.Create(&attendance).Error
 		}
@@ -317,14 +335,18 @@ func ClockOutEmployee(c *gin.Context) {
 		return
 	}
 
-	now := time.Now().In(jakartaLocation)
-	date := jakartaDate(now)
+	now := time.Now().UTC()
 	var attendance models.EmployeeAttendance
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
 		var branch models.Branch
 		if err := tx.Where("id = ? AND business_id = ?", branchID, businessID).First(&branch).Error; err != nil {
 			return errBranchLocationUnset
 		}
+		branchLocation, err := utils.LoadTimezone(branch.Timezone)
+		if err != nil {
+			return err
+		}
+		date := attendanceDateAt(now, branchLocation)
 		if _, err := validateAttendanceLocation(branch, location); err != nil {
 			return err
 		}
@@ -430,7 +452,7 @@ func employeeAttendanceScope(c *gin.Context) (uuid.UUID, uuid.UUID, uuid.UUID, b
 	return businessID, branchID, employeeID, true
 }
 
-func employeeAttendanceStatus(shift string, clockIn time.Time) string {
+func employeeAttendanceStatus(shift string, clockIn time.Time, location *time.Location) string {
 	shiftStart, _, ok := strings.Cut(shift, "–")
 	if !ok {
 		shiftStart, _, ok = strings.Cut(shift, "-")
@@ -439,12 +461,12 @@ func employeeAttendanceStatus(shift string, clockIn time.Time) string {
 		return "Hadir"
 	}
 	shiftStart = strings.ReplaceAll(strings.TrimSpace(shiftStart), ".", ":")
-	start, err := time.ParseInLocation("15:04", shiftStart, jakartaLocation)
+	start, err := time.ParseInLocation("15:04", shiftStart, location)
 	if err != nil {
 		return "Hadir"
 	}
-	clockIn = clockIn.In(jakartaLocation)
-	scheduledStart := time.Date(clockIn.Year(), clockIn.Month(), clockIn.Day(), start.Hour(), start.Minute(), 0, 0, jakartaLocation)
+	clockIn = clockIn.In(location)
+	scheduledStart := time.Date(clockIn.Year(), clockIn.Month(), clockIn.Day(), start.Hour(), start.Minute(), 0, 0, location)
 	if clockIn.After(scheduledStart) {
 		return "Terlambat"
 	}
@@ -467,9 +489,8 @@ func employeeToResponse(employee models.Employee, attendance *models.EmployeeAtt
 	return response
 }
 
-func jakartaDate(value time.Time) time.Time {
-	local := value.In(jakartaLocation)
-	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, jakartaLocation)
+func attendanceDateAt(value time.Time, location *time.Location) string {
+	return value.In(location).Format("2006-01-02")
 }
 
 func respondEmployeeAttendanceError(c *gin.Context, err error) {

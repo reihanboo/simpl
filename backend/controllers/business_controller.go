@@ -22,6 +22,7 @@ type CreateBusinessInput struct {
 	Address        string `json:"address"`
 	Plan           string `json:"plan" binding:"required"`
 	DurationMonths int    `json:"duration_months"`
+	Timezone       string `json:"timezone"`
 }
 
 func CreateBusiness(c *gin.Context) {
@@ -35,6 +36,13 @@ func CreateBusiness(c *gin.Context) {
 	var input CreateBusinessInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.RespondBindError(c, err)
+		return
+	}
+	if input.Timezone == "" {
+		input.Timezone = utils.DefaultTimezone
+	}
+	if _, err := utils.LoadTimezone(input.Timezone); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Zona waktu cabang tidak valid.")
 		return
 	}
 
@@ -72,6 +80,7 @@ func CreateBusiness(c *gin.Context) {
 		BusinessID: business.ID,
 		Name:       "Cabang Utama",
 		Address:    input.Address,
+		Timezone:   input.Timezone,
 	}
 	if err := config.DB.Create(&branch).Error; err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat cabang utama. Silakan coba lagi.")
