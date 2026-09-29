@@ -11,6 +11,7 @@ import {
   MapPin,
   Users,
 } from 'lucide-react';
+import { getBestCurrentPosition, LocationCaptureError } from '../../../../utils/geolocation';
 
 type AttendanceStatus = 'Hadir' | 'Terlambat' | 'Belum masuk';
 
@@ -55,6 +56,16 @@ interface BranchLocation {
   timezone: string;
 }
 
+interface LocationDiagnostic {
+  distance_m: number;
+  geofence_radius_m: number;
+  accuracy_m: number;
+  branch_latitude: number;
+  branch_longitude: number;
+  device_latitude: number;
+  device_longitude: number;
+}
+
 function formatClock(value: string | null, timezone: string) {
   if (!value) return '—';
   const date = new Date(value);
@@ -86,24 +97,18 @@ function mapAttendance(record: EmployeeAttendanceRecord): EmployeeAttendance {
 }
 
 function getCurrentLocation(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Perangkat ini tidak mendukung layanan lokasi.'));
-      return;
+  return getBestCurrentPosition().catch((cause: unknown) => {
+    if (!(cause instanceof LocationCaptureError)) throw cause;
+    if (cause.code === 'unsupported') {
+      throw new Error('Perangkat ini tidak mendukung layanan lokasi.');
     }
-    navigator.geolocation.getCurrentPosition(
-      resolve,
-      (error) => {
-        if (error.code === error.PERMISSION_DENIED) {
-          reject(new Error('Izin lokasi ditolak. Izinkan akses lokasi di browser untuk mencatat presensi.'));
-        } else if (error.code === error.TIMEOUT) {
-          reject(new Error('Pencarian lokasi melewati batas waktu. Coba lagi di area dengan sinyal GPS yang lebih baik.'));
-        } else {
-          reject(new Error('Lokasi perangkat tidak tersedia. Pastikan GPS aktif lalu coba lagi.'));
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
+    if (cause.code === 'permission-denied') {
+      throw new Error('Izin lokasi ditolak. Izinkan akses lokasi di browser untuk mencatat presensi.');
+    }
+    if (cause.code === 'timeout') {
+      throw new Error('Pencarian lokasi melewati batas waktu. Coba lagi di area dengan sinyal GPS yang lebih baik.');
+    }
+    throw new Error('Lokasi perangkat tidak tersedia. Pastikan GPS aktif lalu coba lagi.');
   });
 }
 
@@ -114,6 +119,7 @@ export default function AttendanceIndex() {
   const [isLoading, setIsLoading] = useState(true);
   const [workingEmployeeId, setWorkingEmployeeId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [locationDiagnostic, setLocationDiagnostic] = useState<LocationDiagnostic | null>(null);
   const [notice, setNotice] = useState('');
   const timezone = branch?.timezone || 'Asia/Jakarta';
   const todayLabel = new Intl.DateTimeFormat('id-ID', {
@@ -163,59 +169,92 @@ export default function AttendanceIndex() {
   const geofenceReady = branch?.latitude != null && branch.longitude != null && branch.geofence_radius_m > 0;
 
   const handlePunch = async (employee: EmployeeAttendance, action: 'clock-in' | 'clock-out') => {
-    if (!branchId) return;
-    setWorkingEmployeeId(employee.id);
-    setError('');
-    setNotice('');
-    try {
-      const position = await getCurrentLocation();
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const response = await fetch(`/api/branches/${branchId}/employees/${employee.id}/attendance/${action}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy_m: position.coords.accuracy,
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Gagal mencatat presensi.');
-      const attendance = payload.attendance as {
-        status: AttendanceStatus;
-        clock_in: string | null;
-        clock_out: string | null;
-        clock_in_accuracy_m: number | null;
-        clock_out_accuracy_m: number | null;
-        clock_in_latitude: number | null;
-        clock_in_longitude: number | null;
-        clock_out_latitude: number | null;
-        clock_out_longitude: number | null;
-      };
-      setEmployees((current) => current.map((item) => item.id === employee.id
-        ? {
-          ...item,
-          attendanceStatus: attendance.status,
-          clockIn: attendance.clock_in,
-          clockOut: attendance.clock_out,
-          clockInAccuracyM: attendance.clock_in_accuracy_m,
-          clockOutAccuracyM: attendance.clock_out_accuracy_m,
-          clockInLatitude: attendance.clock_in_latitude,
-          clockInLongitude: attendance.clock_in_longitude,
-          clockOutLatitude: attendance.clock_out_latitude,
-          clockOutLongitude: attendance.clock_out_longitude,
+      if (!branchId || !employee.id) {
+        setError('ID cabang atau pegawai tidak valid. Muat ulang halaman lalu coba lagi.');
+        return;
+      }
+      setWorkingEmployeeId(employee.id);
+      setError('');
+      setLocationDiagnostic(null);
+      setNotice('');
+
+      try {
+        // 1. Get client position
+        let position: GeolocationPosition;
+        try {
+          position = await getCurrentLocation();
+        } catch (geoError) {
+          // Handle client-side geolocation failure directly
+          const errorMessage = geoError instanceof Error ? geoError.message : 'Gagal mendapatkan lokasi perangkat.';
+          setError(errorMessage);
+          return;
         }
-        : item));
-      setNotice(`${action === 'clock-in' ? 'Clock-in' : 'Clock-out'} ${employee.name} berhasil dicatat.`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Gagal mencatat presensi.');
-    } finally {
-      setWorkingEmployeeId(null);
-    }
-  };
+
+        // 2. Call Attendance API
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const attendanceUrl = `/api/branches/${encodeURIComponent(branchId)}/employees/${encodeURIComponent(employee.id)}/attendance/${action}`;
+        const response = await fetch(attendanceUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy_m: position.coords.accuracy,
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        // Check for diagnostic payload in snake_case or camelCase
+        const diagnostic = payload.location_diagnostic || payload.locationDiagnostic;
+        if (diagnostic) {
+          setLocationDiagnostic(diagnostic as LocationDiagnostic);
+        }
+
+        if (!response.ok) {
+          throw new Error(payload.error || 'Gagal mencatat presensi.');
+        }
+
+        const attendance = payload.attendance as {
+          status: AttendanceStatus;
+          clock_in: string | null;
+          clock_out: string | null;
+          clock_in_accuracy_m: number | null;
+          clock_out_accuracy_m: number | null;
+          clock_in_latitude: number | null;
+          clock_in_longitude: number | null;
+          clock_out_latitude: number | null;
+          clock_out_longitude: number | null;
+        };
+
+        setEmployees((current) =>
+          current.map((item) =>
+            item.id === employee.id
+              ? {
+                  ...item,
+                  attendanceStatus: attendance.status,
+                  clockIn: attendance.clock_in,
+                  clockOut: attendance.clock_out,
+                  clockInAccuracyM: attendance.clock_in_accuracy_m,
+                  clockOutAccuracyM: attendance.clock_out_accuracy_m,
+                  clockInLatitude: attendance.clock_in_latitude,
+                  clockInLongitude: attendance.clock_in_longitude,
+                  clockOutLatitude: attendance.clock_out_latitude,
+                  clockOutLongitude: attendance.clock_out_longitude,
+                }
+              : item
+          )
+        );
+        setNotice(`${action === 'clock-in' ? 'Clock-in' : 'Clock-out'} ${employee.name} berhasil dicatat.`);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Gagal mencatat presensi.');
+      } finally {
+        setWorkingEmployeeId(null);
+      }
+    };
 
   return (
     <div className="space-y-6 pb-8">
@@ -233,6 +272,17 @@ export default function AttendanceIndex() {
       </div>
 
       {error && <p role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {locationDiagnostic && (
+        <section aria-label="Diagnostik lokasi presensi" className="border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <h2 className="font-semibold">Detail pemeriksaan lokasi</h2>
+          <p className="mt-1">Jarak terukur {Math.round(locationDiagnostic.distance_m)} m · radius cabang {locationDiagnostic.geofence_radius_m} m · akurasi GPS ±{Math.round(locationDiagnostic.accuracy_m)} m.</p>
+          <p className="mt-1 text-xs">Pin cabang: {locationDiagnostic.branch_latitude.toFixed(6)}, {locationDiagnostic.branch_longitude.toFixed(6)} · perangkat: {locationDiagnostic.device_latitude.toFixed(6)}, {locationDiagnostic.device_longitude.toFixed(6)}</p>
+          <div className="mt-2 flex flex-wrap gap-4 text-xs font-semibold">
+            <a className="underline" href={`https://www.google.com/maps?q=${locationDiagnostic.branch_latitude},${locationDiagnostic.branch_longitude}`} target="_blank" rel="noreferrer">Lihat pin cabang</a>
+            <a className="underline" href={`https://www.google.com/maps?q=${locationDiagnostic.device_latitude},${locationDiagnostic.device_longitude}`} target="_blank" rel="noreferrer">Lihat lokasi perangkat</a>
+          </div>
+        </section>
+      )}
       {notice && <p role="status" className="border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{notice}</p>}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -272,7 +322,7 @@ export default function AttendanceIndex() {
             </a>
           )}
         </div>
-        {geofenceReady && <p className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500">Setiap clock-in dan clock-out memerlukan akurasi GPS maksimal 100 m dan divalidasi terhadap radius ini oleh server.</p>}
+        {geofenceReady && <p className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500">Setiap clock-in dan clock-out memerlukan akurasi GPS maksimal 200 m; hingga 100 m ketidakpastian GPS diperhitungkan di batas radius oleh server.</p>}
       </section>
 
       <section className="overflow-hidden border border-slate-300 bg-white">

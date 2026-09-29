@@ -29,7 +29,7 @@ var (
 	errAlreadyClockedOut   = errors.New("pegawai sudah clock-out hari ini")
 	errBranchLocationUnset = errors.New("lokasi cabang belum diatur; atur titik lokasi cabang terlebih dahulu")
 	errOutsideGeofence     = errors.New("lokasi perangkat berada di luar area cabang")
-	errLocationAccuracy    = errors.New("akurasi lokasi harus 100 meter atau lebih baik")
+	errLocationAccuracy    = errors.New("akurasi lokasi harus 200 meter atau lebih baik")
 	errLocationInvalid     = errors.New("koordinat atau akurasi lokasi tidak valid")
 )
 
@@ -393,6 +393,24 @@ type attendanceLocationInput struct {
 	AccuracyM *float64 `json:"accuracy_m"`
 }
 
+type attendanceGeofenceError struct {
+	DistanceM       float64 `json:"distance_m"`
+	RadiusM         int     `json:"geofence_radius_m"`
+	AccuracyM       float64 `json:"accuracy_m"`
+	BranchLatitude  float64 `json:"branch_latitude"`
+	BranchLongitude float64 `json:"branch_longitude"`
+	DeviceLatitude  float64 `json:"device_latitude"`
+	DeviceLongitude float64 `json:"device_longitude"`
+}
+
+func (e *attendanceGeofenceError) Error() string {
+	return errOutsideGeofence.Error()
+}
+
+func (e *attendanceGeofenceError) Unwrap() error {
+	return errOutsideGeofence
+}
+
 func attendanceLocationFromRequest(c *gin.Context) (attendanceLocationInput, bool) {
 	var input attendanceLocationInput
 	if err := c.ShouldBindJSON(&input); err != nil || input.Latitude == nil || input.Longitude == nil || input.AccuracyM == nil {
@@ -411,15 +429,24 @@ func validateAttendanceLocation(branch models.Branch, location attendanceLocatio
 		*location.Longitude < -180 || *location.Longitude > 180 || *location.AccuracyM <= 0 {
 		return 0, errLocationInvalid
 	}
-	if *location.AccuracyM > 100 {
+	if *location.AccuracyM > 200 {
 		return 0, errLocationAccuracy
 	}
 	if branch.Latitude == nil || branch.Longitude == nil || branch.GeofenceRadiusM <= 0 {
 		return 0, errBranchLocationUnset
 	}
 	distance := haversineDistanceMeters(*branch.Latitude, *branch.Longitude, *location.Latitude, *location.Longitude)
-	if distance > float64(branch.GeofenceRadiusM) {
-		return distance, errOutsideGeofence
+	uncertaintyAllowance := math.Min(*location.AccuracyM, 100)
+	if distance > float64(branch.GeofenceRadiusM)+uncertaintyAllowance {
+		return distance, &attendanceGeofenceError{
+			DistanceM:       distance,
+			RadiusM:         branch.GeofenceRadiusM,
+			AccuracyM:       *location.AccuracyM,
+			BranchLatitude:  *branch.Latitude,
+			BranchLongitude: *branch.Longitude,
+			DeviceLatitude:  *location.Latitude,
+			DeviceLongitude: *location.Longitude,
+		}
 	}
 	return distance, nil
 }
@@ -432,6 +459,7 @@ func haversineDistanceMeters(latitudeA, longitudeA, latitudeB, longitudeB float6
 	a := math.Sin(latDelta/2)*math.Sin(latDelta/2) +
 		math.Cos(toRadians(latitudeA))*math.Cos(toRadians(latitudeB))*
 			math.Sin(lonDelta/2)*math.Sin(lonDelta/2)
+	a = math.Max(0, math.Min(1, a))
 	return earthRadiusMeters * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
@@ -502,7 +530,23 @@ func respondEmployeeAttendanceError(c *gin.Context, err error) {
 		errors.Is(err, errBranchLocationUnset):
 		utils.RespondError(c, http.StatusConflict, err.Error()+".")
 	case errors.Is(err, errOutsideGeofence):
-		utils.RespondError(c, http.StatusForbidden, err.Error()+".")
+		var geofenceErr *attendanceGeofenceError
+		if errors.As(err, &geofenceErr) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": err.Error() + ".",
+				"location_diagnostic": gin.H{
+					"distance_m":        math.Round(geofenceErr.DistanceM),
+					"geofence_radius_m": geofenceErr.RadiusM,
+					"accuracy_m":        math.Round(geofenceErr.AccuracyM),
+					"branch_latitude":   geofenceErr.BranchLatitude,
+					"branch_longitude":  geofenceErr.BranchLongitude,
+					"device_latitude":   geofenceErr.DeviceLatitude,
+					"device_longitude":  geofenceErr.DeviceLongitude,
+				},
+			})
+		} else {
+			utils.RespondError(c, http.StatusForbidden, err.Error()+".")
+		}
 	case errors.Is(err, errLocationAccuracy), errors.Is(err, errLocationInvalid):
 		utils.RespondError(c, http.StatusBadRequest, err.Error()+".")
 	default:
