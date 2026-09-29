@@ -85,6 +85,15 @@ func main() {
 			branch.GET("/:id/customers/:customer_id", controllers.GetCustomer)
 			branch.PUT("/:id/customers/:customer_id", controllers.UpdateCustomer)
 			branch.DELETE("/:id/customers/:customer_id", controllers.ArchiveCustomer)
+
+			// Employee Management System
+			branch.GET("/:id/employees", controllers.GetEmployees)
+			branch.POST("/:id/employees", controllers.CreateEmployee)
+			branch.PUT("/:id/employees/:employee_id", controllers.UpdateEmployee)
+			branch.DELETE("/:id/employees/:employee_id", controllers.DeleteEmployee)
+			branch.POST("/:id/employees/:employee_id/attendance/clock-in", controllers.ClockInEmployee)
+			branch.POST("/:id/employees/:employee_id/attendance/clock-out", controllers.ClockOutEmployee)
+
 			branch.POST("/:id/customers/:customer_id/points", controllers.AdjustCustomerPoints)
 			branch.POST("/:id/customers/:customer_id/redeem", controllers.RedeemLoyaltyReward)
 			branch.GET("/:id/loyalty-rewards", controllers.GetLoyaltyRewards)
