@@ -57,11 +57,18 @@ func main() {
 			auth.PUT("/me", middlewares.AuthMiddleware(), controllers.UpdateProfile)
 		}
 
+		// Midtrans server-to-server notification. Unauthenticated: Midtrans calls
+		// this directly, and the request is verified via its SHA-512 signature.
+		api.POST("/midtrans/notification", controllers.MidtransNotification)
+
 		business := api.Group("/business")
 		business.Use(middlewares.AuthMiddleware())
 		{
 			business.POST("", controllers.CreateBusiness)
 			business.GET("", controllers.GetBusinesses)
+			business.GET("/:id/subscription/upgrade/quote", controllers.GetSubscriptionUpgradeQuote)
+			business.POST("/:id/subscription/upgrade", controllers.CreateSubscriptionUpgrade)
+			business.POST("/:id/subscription/upgrade/confirm", controllers.ConfirmSubscriptionUpgrade)
 		}
 
 		branch := api.Group("/branches")

@@ -22,6 +22,7 @@ import BranchReports from './pages/dashboard/branch/reports/index';
 import CustomersIndex from './pages/dashboard/branch/customers/index';
 import EmployeesIndex from './pages/dashboard/branch/employees/index';
 import AttendanceIndex from './pages/dashboard/branch/attendance';
+import BranchSettings from './pages/dashboard/branch/settings';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
 
@@ -579,6 +580,7 @@ export default function App() {
             <Route path="customers" element={<CustomersIndex />} />
             <Route path="employees" element={<EmployeesIndex />} />
             <Route path="attendance" element={<AttendanceIndex />} />
+            <Route path="settings" element={<BranchSettings />} />
           </Route>
         </Route>
       </Route>

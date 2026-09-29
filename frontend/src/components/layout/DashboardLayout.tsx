@@ -78,6 +78,7 @@ export default function DashboardLayout() {
               name: b.name,
               plan: b.subscription?.plan_id || 'Unknown',
               status: b.subscription?.status,
+              currentPeriodEnd: b.subscription?.current_period_end,
               snapToken: b.subscription?.snap_token_midtrans
             }));
             setOrganizations(orgs);
