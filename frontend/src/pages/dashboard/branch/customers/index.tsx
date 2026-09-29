@@ -775,7 +775,7 @@ export default function CustomersIndex() {
                           <div
                             data-customer-action-menu
                             style={{ top: actionMenuPosition.top, right: actionMenuPosition.right }}
-                            className="fixed z-[100] w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg"
+                            className="fixed z-100 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-lg"
                           >
                             <button type="button" onClick={() => void handleViewCustomer(customer)} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
                               <Eye className="h-4 w-4" /> Lihat detail
@@ -911,25 +911,25 @@ export default function CustomersIndex() {
 
       {isDetailOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsDetailOpen(false)} />
+          <div className="absolute inset-0 bg-slate-950/40" onClick={() => setIsDetailOpen(false)} />
           <motion.div
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="customer-detail-title"
-            className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+            className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 p-6">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-300 p-5">
               <div>
-                <h2 id="customer-detail-title" className="text-xl font-bold text-slate-900">{detail?.customer.name || 'Detail pelanggan'}</h2>
+                <h2 id="customer-detail-title" className="text-lg font-semibold text-slate-900">{detail?.customer.name || 'Detail pelanggan'}</h2>
                 <p className="mt-1 text-sm text-slate-500">Profil dan riwayat pembelian pelanggan</p>
               </div>
-              <button type="button" onClick={() => setIsDetailOpen(false)} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Tutup detail">
+              <button type="button" onClick={() => setIsDetailOpen(false)} className="inline-flex h-10 w-10 items-center justify-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#21AC3A]" aria-label="Tutup detail">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="overflow-y-auto p-6">
+            <div className="overflow-y-auto p-4 sm:p-5">
               {isDetailLoading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
                   <Loader2 className="h-5 w-5 animate-spin text-[#21AC3A]" /> Memuat detail pelanggan...
@@ -1056,8 +1056,8 @@ export default function CustomersIndex() {
                 </>
               ) : null}
             </div>
-            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-100 bg-slate-50 p-5">
-              <button type="button" onClick={() => setIsDetailOpen(false)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Tutup</button>
+            <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-slate-50 p-4">
+              <button type="button" onClick={() => setIsDetailOpen(false)} className="min-h-10 border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100">Tutup</button>
               {detail && !isDetailLoading && (
                 <button
                   type="button"
@@ -1066,7 +1066,7 @@ export default function CustomersIndex() {
                     setIsDetailOpen(false);
                     openEditModal({ id: customer.id, name: customer.name, email: customer.email || '', phone: customer.phone || '', orders: customer.orders, lifetimeValue: customer.lifetime_value_idr, lastVisit: customer.last_visit, type: customer.type, loyaltyPoints: customer.loyalty_points, membershipActive: customer.membership_active });
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#21AC3A] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d9732]"
+                  className="inline-flex min-h-10 items-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732]"
                 >
                   <Pencil className="h-4 w-4" /> Ubah data
                 </button>
