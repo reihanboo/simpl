@@ -456,7 +456,7 @@ export default function BranchDashboard() {
           </div>
         </section>
 
-        <aside className="flex h-[760px] min-h-0 max-h-[calc(100vh_-_8px)] flex-col overflow-hidden border border-slate-200 bg-white lg:row-span-2">
+        <aside className="flex h-[70vh] min-h-[400px] max-h-[calc(100vh_-_8px)] flex-col overflow-hidden border border-slate-200 bg-white lg:h-[760px] lg:row-span-2">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
             <div>
               <h2 className="text-lg font-semibold">ABAI assistant</h2>

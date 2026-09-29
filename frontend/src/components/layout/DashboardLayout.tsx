@@ -190,7 +190,7 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans">
+    <div className="flex h-dvh bg-slate-50 font-sans">
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
@@ -440,7 +440,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Dashboard Content */}
-        <main className={`flex-1 overflow-y-auto ${isDashboardHome ? 'bg-[#F5F5F5]' : isBranchRoute ? 'bg-slate-50/50' : 'bg-slate-50/50 p-4 sm:p-6 lg:p-8'}`}>
+        <main className={`min-h-0 flex-1 overflow-y-auto ${isDashboardHome ? 'bg-[#F5F5F5]' : isBranchRoute ? 'bg-slate-50/50' : 'bg-slate-50/50 p-4 sm:p-6 lg:p-8'}`}>
           <Outlet context={{ activeOrg }} />
         </main>
         {isDashboardHome && (

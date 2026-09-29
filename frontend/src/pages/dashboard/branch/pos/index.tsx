@@ -14,8 +14,6 @@ import {
   CreditCard,
   Delete,
   Check,
-  Loader2,
-  Phone
   Download,
   RefreshCw,
 } from 'lucide-react';
@@ -50,9 +48,8 @@ interface CartItem {
 interface Customer {
   id: string;
   name: string;
-  email: string;
   phone: string;
-  loyalty_points: number;
+  email: string;
 }
 
 interface Order {
@@ -94,9 +91,6 @@ export default function BranchPOS() {
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
-  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
-  const [customerLoadError, setCustomerLoadError] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
   const [transactionQuery, setTransactionQuery] = useState('');
@@ -186,53 +180,6 @@ export default function BranchPOS() {
     }
   }, [branchId]);
 
-  useEffect(() => {
-    if (!branchId || !isCustomerPickerOpen) return;
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => {
-      const loadCustomers = async () => {
-        setCustomerLoadError('');
-        try {
-          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-          const params = new URLSearchParams({
-            page: '1',
-            page_size: '100',
-            q: customerQuery.trim(),
-          });
-          const response = await fetch(`/api/branches/${branchId}/customers?${params.toString()}`, {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: controller.signal,
-          });
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(payload.error || 'Gagal memuat pelanggan.');
-          setCustomers(payload.data || []);
-        } catch (error) {
-          if (!controller.signal.aborted) {
-            setCustomerLoadError(error instanceof Error ? error.message : 'Gagal memuat pelanggan.');
-          }
-        } finally {
-          if (!controller.signal.aborted) setIsLoadingCustomers(false);
-        }
-      };
-
-      void loadCustomers();
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
-    };
-  }, [branchId, customerQuery, isCustomerPickerOpen]);
-
-  const openCustomerPicker = () => {
-    setIsCustomerPickerOpen(true);
-    setIsLoadingCustomers(true);
-    setCustomerLoadError('');
-    setCustomers([]);
-    setCustomerQuery('');
-  };
-
   const handlePaymentNumpad = (val: string) => {
     setAmountPaid(prev => {
       if (val === 'DEL') {
@@ -321,16 +268,36 @@ export default function BranchPOS() {
   const total = subtotal - totalDiscount;
 
   return (
-    <div className="flex flex-1 h-full w-full bg-slate-100 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#f5f5f5] text-slate-800">
+      <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="mb-1 text-sm text-slate-500">Point of sale</div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Point of sale</h1>
+            <p className="mt-1 text-sm text-slate-500">Register ready · Sales are recorded automatically</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="h-2 w-2 rounded-full bg-green-600" />
+            POS ready
+          </div>
+        </div>
+      </header>
 
-      {/* LEFT PANEL: CART & NUMPAD */}
-      <div className="w-[420px] bg-white flex flex-col h-full shrink-0 border-r border-slate-200 z-10">
-
-        {/* Cart Header */}
-        <div className="p-4 border-b border-slate-200 shrink-0 flex justify-between items-center bg-white">
-          <button onClick={openCustomerPicker} className="flex max-w-55 items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200" title={selectedCustomer?.name || 'Pilih pelanggan'}>
-            <User className="h-4 w-4 shrink-0" />
-            <span className="truncate">{selectedCustomer?.name || 'Pilih pelanggan'}</span>
+      <div className="mx-4 mt-4 flex shrink-0 flex-wrap items-center justify-between gap-3 border border-slate-300 bg-white px-4 py-3 lg:mx-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <span className="text-slate-600">Sales today:</span>
+          <strong className="text-slate-900">{formatIDR(totalToday)}</strong>
+          <span className="hidden text-slate-300 sm:inline">|</span>
+          <span className="text-slate-500">{orders.length} transactions</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCustomerModalOpen(true)}
+            className={`flex items-center gap-2 border px-3 py-2 text-sm font-semibold transition-colors ${selectedCustomer ? 'border-[#21AC3A] bg-green-50 text-green-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+          >
+            <User className="h-4 w-4" />
+            {selectedCustomer ? selectedCustomer.name : 'Select customer (optional)'}
           </button>
           <button
             type="button"
@@ -459,7 +426,7 @@ export default function BranchPOS() {
               <div className="relative min-w-0 flex-1">
                 <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#21AC3A]" />
                 <input
-                  autoFocus
+                  autoFocus="true"
                   type="search"
                   placeholder="Scan barcode or search product"
                   value={searchQuery}
@@ -495,45 +462,32 @@ export default function BranchPOS() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Action Bar (Customer / Note) */}
-        <div className="flex grid-cols-2 bg-slate-100 p-2 gap-2 shrink-0 border-b border-slate-200">
-          <button onClick={openCustomerPicker} className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50" title={selectedCustomer?.name || 'Pilih pelanggan'}>
-            {selectedCustomer?.name || 'Pilih pelanggan'}
-          </button>
-          <button className="flex-1 bg-white border border-slate-200 rounded-lg py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 shadow-sm">
-            Diskon / Voucher
-          </button>
-        </div>
-
-        {/* Numeric Keypad Layout */}
-        <div className="bg-slate-50 p-2 shrink-0">
-          <button
-            onClick={() => setIsPaymentModalOpen(true)}
-            disabled={cart.length === 0}
-            className="w-full bg-[#21AC3A] text-white py-4 rounded-xl text-lg font-bold shadow-md shadow-[#21AC3A]/20 hover:bg-[#1d9732] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
-          >
-            Payment
-          </button>
-        </div>
-
-      </div>
-
-      {/* RIGHT PANEL: PRODUCT CATALOG */}
-      <div className="flex-1 flex flex-col h-full bg-white relative">
-
-        {/* Top Header & Search */}
-        <div className="p-4 border-b border-slate-200 shrink-0 flex gap-4 items-center bg-white shadow-sm z-10">
-          <div className="relative flex-1 max-w-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border-none rounded-lg focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/50 transition-all"
-            />
+          <div className="min-h-40 flex-1 overflow-y-auto">
+            {cart.length === 0 ? (
+                <div className="flex h-full min-h-47.5 flex-col items-center justify-center px-5 text-center text-slate-400">
+                <ShoppingCart className="mb-3 h-10 w-10 opacity-30" />
+                <p className="text-sm font-medium">Your sale is empty</p>
+                <p className="mt-1 text-xs">Search or scan a product to add it.</p>
+              </div>
+            ) : cart.map((item) => (
+              <div key={item.id} className="border-b border-slate-200 px-3 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
+                    <p className="text-xs text-slate-500">{item.qty} × {formatIDR(item.price)}</p>
+                  </div>
+                  <p className="whitespace-nowrap text-sm text-slate-800">{formatIDR(item.price * item.qty)}</p>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="flex items-center border border-slate-300">
+                    <button type="button" onClick={() => updateQty(item.id, -1)} aria-label={`Decrease ${item.name}`} className="flex h-7 w-8 items-center justify-center text-slate-600 hover:bg-slate-100"><Minus className="h-3 w-3" /></button>
+                    <span className="min-w-8 text-center text-xs font-semibold">{item.qty}</span>
+                    <button type="button" onClick={() => updateQty(item.id, 1)} aria-label={`Increase ${item.name}`} className="flex h-7 w-8 items-center justify-center text-slate-600 hover:bg-slate-100"><Plus className="h-3 w-3" /></button>
+                  </div>
+                  <button type="button" onClick={() => removeFromCart(item.id)} aria-label={`Remove ${item.name}`} className="p-1.5 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              </div>
+            ))}
           </div>
           <div className="space-y-2 border-t border-slate-300 px-3 py-3 text-sm">
             <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatIDR(subtotal)}</span></div>
@@ -585,47 +539,6 @@ export default function BranchPOS() {
                 </button>
               ))}
               {!customersLoading && customers.length === 0 && <p className="px-5 py-8 text-center text-sm text-slate-500">No customers found.</p>}
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {isCustomerPickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsCustomerPickerOpen(false); }}>
-          <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-slate-100 p-5">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Pilih pelanggan</h2>
-                <p className="mt-1 text-sm text-slate-500">Pelanggan yang dipilih akan dikaitkan dengan transaksi.</p>
-              </div>
-              <button type="button" onClick={() => setIsCustomerPickerOpen(false)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup pilihan pelanggan">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-5">
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input type="search" value={customerQuery} onChange={(event) => { setCustomerQuery(event.target.value); setIsLoadingCustomers(true); }} placeholder="Cari nama, email, atau nomor telepon..." className="h-11 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
-              </label>
-              <button type="button" onClick={() => { setSelectedCustomer(null); setIsCustomerPickerOpen(false); }} className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-50">
-                Lanjutkan tanpa pelanggan
-              </button>
-              <div className="mt-3 max-h-[min(55vh,420px)] space-y-2 overflow-y-auto">
-                {isLoadingCustomers && <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Memuat pelanggan...</div>}
-                {!isLoadingCustomers && customerLoadError && <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{customerLoadError}</p>}
-                {!isLoadingCustomers && !customerLoadError && customers.map((customer) => (
-                  <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setIsCustomerPickerOpen(false); }} className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50/50">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-sm font-semibold text-emerald-700">{customer.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-slate-800">{customer.name}</span>
-                      <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500"><Phone className="h-3 w-3 shrink-0" />{customer.phone || customer.email || 'Tidak ada kontak'}</span>
-                      <span className="mt-1 block text-[11px] text-slate-400">{customer.loyalty_points.toLocaleString('id-ID')} poin</span>
-                    </span>
-                    {selectedCustomer?.id === customer.id && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
-                  </button>
-                ))}
-                {!isLoadingCustomers && !customerLoadError && customers.length === 0 && <p className="py-8 text-center text-sm text-slate-500">Tidak ada pelanggan yang cocok.</p>}
-              </div>
             </div>
           </motion.div>
         </div>

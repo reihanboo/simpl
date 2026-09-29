@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -11,12 +11,15 @@ import {
   TrendingUp,
   ChevronLeft,
   ChevronRight,
+  MoreHorizontal,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Sidebar({ branchId }: { branchId: string }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [branchName, setBranchName] = useState('');
+  const location = useLocation();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,12 +51,24 @@ export default function Sidebar({ branchId }: { branchId: string }) {
     { name: 'Laporan', icon: <TrendingUp className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/reports` },
     { name: 'Pengaturan', icon: <Settings className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/settings` },
   ];
+  const mobilePrimaryItems = navItems.filter((item) =>
+    ['Dashboard', 'Point of Sales (POS)', 'Inventori & Stok', 'Laporan'].includes(item.name)
+  );
+  const mobileMoreItems = navItems.filter((item) => !mobilePrimaryItems.includes(item));
+  const mobileLabels: Record<string, string> = {
+    Dashboard: 'Ringkasan',
+    'Point of Sales (POS)': 'Kasir',
+    'Inventori & Stok': 'Stok',
+    Laporan: 'Laporan',
+  };
+  const isMoreActive = mobileMoreItems.some((item) => location.pathname === item.path);
 
   return (
+    <>
     <motion.aside
       initial={false}
       animate={{ width: isCollapsed ? 56 : 232 }}
-      className="sticky top-0 z-20 hidden h-[calc(100vh-4rem)] min-h-0 shrink-0 self-start flex-col border-r border-slate-200 bg-white md:flex"
+      className="sticky top-0 z-20 hidden h-[calc(100dvh-4rem)] min-h-0 shrink-0 self-start flex-col border-r border-slate-200 bg-white md:flex"
     >
       <div className={`flex min-h-16 shrink-0 items-center border-b border-slate-200 ${isCollapsed ? 'justify-center px-1' : 'px-4 py-3'}`}>
         {!isCollapsed && (
@@ -108,5 +123,55 @@ export default function Sidebar({ branchId }: { branchId: string }) {
       </nav>
 
     </motion.aside>
+
+    {isMobileMenuOpen && (
+      <>
+        <button
+          type="button"
+          aria-label="Tutup menu lainnya"
+          className="fixed inset-0 z-40 bg-slate-900/20 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+        <div role="dialog" aria-label="Menu cabang lainnya" className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 border-t border-slate-200 bg-white p-3 shadow-lg md:hidden">
+          <div className="grid grid-cols-2 gap-2">
+            {mobileMoreItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={({ isActive }) => `flex min-h-12 items-center gap-3 border px-3 text-sm font-medium ${isActive ? 'border-green-200 bg-green-50 text-[#16852B]' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              >
+                <span className="text-slate-500">{item.icon}</span>
+                <span>{item.name}</span>
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      </>
+    )}
+
+    <nav aria-label="Navigasi mobile cabang" className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+      {mobilePrimaryItems.map((item) => (
+        <NavLink
+          key={item.path}
+          to={item.path}
+          end={item.name === 'Dashboard'}
+          className={({ isActive }) => `flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium ${isActive ? 'text-[#16852B]' : 'text-slate-500'}`}
+        >
+          {item.icon}
+          <span className="max-w-full truncate">{mobileLabels[item.name]}</span>
+        </NavLink>
+      ))}
+      <button
+        type="button"
+        aria-expanded={isMobileMenuOpen}
+        onClick={() => setIsMobileMenuOpen((open) => !open)}
+        className={`flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium ${isMobileMenuOpen || isMoreActive ? 'text-[#16852B]' : 'text-slate-500'}`}
+      >
+        <MoreHorizontal className="h-5 w-5" />
+        <span>Lainnya</span>
+      </button>
+    </nav>
+    </>
   );
 }
