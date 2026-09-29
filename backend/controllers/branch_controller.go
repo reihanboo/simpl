@@ -4,6 +4,7 @@ import (
 	"backend/config"
 	"backend/models"
 	"backend/utils"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -30,9 +31,12 @@ func GetBranches(c *gin.Context) {
 
 func CreateBranch(c *gin.Context) {
 	var input struct {
-		BusinessID string `json:"business_id" binding:"required"`
-		Name       string `json:"name" binding:"required"`
-		Address    string `json:"address"`
+		BusinessID      string   `json:"business_id" binding:"required"`
+		Name            string   `json:"name" binding:"required"`
+		Address         string   `json:"address"`
+		Latitude        *float64 `json:"latitude"`
+		Longitude       *float64 `json:"longitude"`
+		GeofenceRadiusM *int     `json:"geofence_radius_m"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -42,7 +46,7 @@ func CreateBranch(c *gin.Context) {
 
 	// Optionally we could verify if the user is a member/owner of the business.
 	// For simplicity in this step, we just parse the BusinessID.
-	
+
 	businessUUID, err := uuid.Parse(input.BusinessID)
 	if err != nil {
 		utils.RespondError(c, http.StatusBadRequest, "ID Bisnis tidak valid.")
@@ -56,6 +60,11 @@ func CreateBranch(c *gin.Context) {
 		BusinessID: businessUUID,
 		Name:       input.Name,
 		Address:    input.Address,
+	}
+	if err := applyBranchLocation(&branch, input.Latitude, input.Longitude, input.GeofenceRadiusM, true); err != nil {
+		tx.Rollback()
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	if err := tx.Create(&branch).Error; err != nil {
@@ -89,7 +98,7 @@ func CreateBranch(c *gin.Context) {
 	tx.Commit()
 
 	c.JSON(http.StatusCreated, gin.H{
-		"branch": branch,
+		"branch":  branch,
 		"message": "Cabang berhasil dibuat",
 	})
 }
@@ -102,8 +111,11 @@ func UpdateBranch(c *gin.Context) {
 	}
 
 	var input struct {
-		Name    string `json:"name" binding:"required"`
-		Address string `json:"address"`
+		Name            string   `json:"name" binding:"required"`
+		Address         string   `json:"address"`
+		Latitude        *float64 `json:"latitude"`
+		Longitude       *float64 `json:"longitude"`
+		GeofenceRadiusM *int     `json:"geofence_radius_m"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -119,6 +131,10 @@ func UpdateBranch(c *gin.Context) {
 
 	branch.Name = input.Name
 	branch.Address = input.Address
+	if err := applyBranchLocation(&branch, input.Latitude, input.Longitude, input.GeofenceRadiusM, false); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	if err := config.DB.Save(&branch).Error; err != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui cabang.")
@@ -126,9 +142,31 @@ func UpdateBranch(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"branch": branch,
+		"branch":  branch,
 		"message": "Cabang berhasil diperbarui",
 	})
+}
+
+func applyBranchLocation(branch *models.Branch, latitude, longitude *float64, radius *int, isCreate bool) error {
+	if (latitude == nil) != (longitude == nil) {
+		return fmt.Errorf("latitude dan longitude harus diisi bersamaan.")
+	}
+	if latitude != nil {
+		if *latitude < -90 || *latitude > 90 || *longitude < -180 || *longitude > 180 {
+			return fmt.Errorf("Koordinat lokasi cabang tidak valid.")
+		}
+		branch.Latitude = latitude
+		branch.Longitude = longitude
+	}
+	if radius != nil {
+		if *radius < 10 || *radius > 5000 {
+			return fmt.Errorf("Radius geofence harus antara 10 dan 5000 meter.")
+		}
+		branch.GeofenceRadiusM = *radius
+	} else if isCreate && branch.GeofenceRadiusM == 0 {
+		branch.GeofenceRadiusM = 100
+	}
+	return nil
 }
 
 func DeleteBranch(c *gin.Context) {

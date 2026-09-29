@@ -7,9 +7,12 @@ import (
 )
 
 type Branch struct {
-	ID         uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	BusinessID uuid.UUID `gorm:"type:uuid;not null" json:"business_id"`
-	Name       string    `gorm:"type:varchar(255);not null" json:"name"`
-	Address    string    `gorm:"type:text" json:"address"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID              uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	BusinessID      uuid.UUID `gorm:"type:uuid;not null" json:"business_id"`
+	Name            string    `gorm:"type:varchar(255);not null" json:"name"`
+	Address         string    `gorm:"type:text" json:"address"`
+	Latitude        *float64  `gorm:"type:double precision" json:"latitude"`
+	Longitude       *float64  `gorm:"type:double precision" json:"longitude"`
+	GeofenceRadiusM int       `gorm:"not null;default:100" json:"geofence_radius_m"`
+	CreatedAt       time.Time `json:"created_at"`
 }
