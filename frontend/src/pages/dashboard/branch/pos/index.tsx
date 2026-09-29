@@ -12,7 +12,10 @@ import {
   Minus,
   X,
   CreditCard,
-  Delete
+  Delete,
+  Check,
+  Loader2,
+  Phone
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -34,6 +37,14 @@ interface CartItem {
   discount: number;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  loyalty_points: number;
+}
+
 export default function BranchPOS() {
   const { id: branchId } = useParams();
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,6 +54,12 @@ export default function BranchPOS() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [customerLoadError, setCustomerLoadError] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -70,6 +87,53 @@ export default function BranchPOS() {
       fetchProducts();
     }
   }, [branchId]);
+
+  useEffect(() => {
+    if (!branchId || !isCustomerPickerOpen) return;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      const loadCustomers = async () => {
+        setCustomerLoadError('');
+        try {
+          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+          const params = new URLSearchParams({
+            page: '1',
+            page_size: '100',
+            q: customerQuery.trim(),
+          });
+          const response = await fetch(`/api/branches/${branchId}/customers?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || 'Gagal memuat pelanggan.');
+          setCustomers(payload.data || []);
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            setCustomerLoadError(error instanceof Error ? error.message : 'Gagal memuat pelanggan.');
+          }
+        } finally {
+          if (!controller.signal.aborted) setIsLoadingCustomers(false);
+        }
+      };
+
+      void loadCustomers();
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [branchId, customerQuery, isCustomerPickerOpen]);
+
+  const openCustomerPicker = () => {
+    setIsCustomerPickerOpen(true);
+    setIsLoadingCustomers(true);
+    setCustomerLoadError('');
+    setCustomers([]);
+    setCustomerQuery('');
+  };
 
   const handlePaymentNumpad = (val: string) => {
     setAmountPaid(prev => {
@@ -131,9 +195,9 @@ export default function BranchPOS() {
 
         {/* Cart Header */}
         <div className="p-4 border-b border-slate-200 shrink-0 flex justify-between items-center bg-white">
-          <button className="flex items-center gap-2 text-sm font-semibold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg hover:bg-slate-200 transition-colors">
-            <User className="w-4 h-4" />
-            Customer
+          <button onClick={openCustomerPicker} className="flex max-w-55 items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-200" title={selectedCustomer?.name || 'Pilih pelanggan'}>
+            <User className="h-4 w-4 shrink-0" />
+            <span className="truncate">{selectedCustomer?.name || 'Pilih pelanggan'}</span>
           </button>
           <button
             onClick={() => setCart([])}
@@ -210,8 +274,8 @@ export default function BranchPOS() {
 
         {/* Action Bar (Customer / Note) */}
         <div className="flex grid-cols-2 bg-slate-100 p-2 gap-2 shrink-0 border-b border-slate-200">
-          <button className="flex-1 bg-white border border-slate-200 rounded-lg py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 shadow-sm">
-            Customer
+          <button onClick={openCustomerPicker} className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50" title={selectedCustomer?.name || 'Pilih pelanggan'}>
+            {selectedCustomer?.name || 'Pilih pelanggan'}
           </button>
           <button className="flex-1 bg-white border border-slate-200 rounded-lg py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 shadow-sm">
             Diskon / Voucher
@@ -301,6 +365,47 @@ export default function BranchPOS() {
           </table>
         </div>
       </div>
+
+      {isCustomerPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsCustomerPickerOpen(false); }}>
+          <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-100 p-5">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Pilih pelanggan</h2>
+                <p className="mt-1 text-sm text-slate-500">Pelanggan yang dipilih akan dikaitkan dengan transaksi.</p>
+              </div>
+              <button type="button" onClick={() => setIsCustomerPickerOpen(false)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup pilihan pelanggan">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input type="search" value={customerQuery} onChange={(event) => { setCustomerQuery(event.target.value); setIsLoadingCustomers(true); }} placeholder="Cari nama, email, atau nomor telepon..." className="h-11 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
+              </label>
+              <button type="button" onClick={() => { setSelectedCustomer(null); setIsCustomerPickerOpen(false); }} className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-50">
+                Lanjutkan tanpa pelanggan
+              </button>
+              <div className="mt-3 max-h-[min(55vh,420px)] space-y-2 overflow-y-auto">
+                {isLoadingCustomers && <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Memuat pelanggan...</div>}
+                {!isLoadingCustomers && customerLoadError && <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{customerLoadError}</p>}
+                {!isLoadingCustomers && !customerLoadError && customers.map((customer) => (
+                  <button key={customer.id} type="button" onClick={() => { setSelectedCustomer(customer); setIsCustomerPickerOpen(false); }} className="flex w-full items-center gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-emerald-200 hover:bg-emerald-50/50">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-sm font-semibold text-emerald-700">{customer.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-slate-800">{customer.name}</span>
+                      <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500"><Phone className="h-3 w-3 shrink-0" />{customer.phone || customer.email || 'Tidak ada kontak'}</span>
+                      <span className="mt-1 block text-[11px] text-slate-400">{customer.loyalty_points.toLocaleString('id-ID')} poin</span>
+                    </span>
+                    {selectedCustomer?.id === customer.id && <Check className="h-4 w-4 shrink-0 text-emerald-600" />}
+                  </button>
+                ))}
+                {!isLoadingCustomers && !customerLoadError && customers.length === 0 && <p className="py-8 text-center text-sm text-slate-500">Tidak ada pelanggan yang cocok.</p>}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* PAYMENT MODAL */}
       {isPaymentModalOpen && (
@@ -430,6 +535,7 @@ export default function BranchPOS() {
                     
                     const orderPayload = {
                       payment_method: 'cash',
+                      ...(selectedCustomer ? { customer_id: selectedCustomer.id } : {}),
                       items: cart.map(item => ({
                         product_id: item.id,
                         qty: item.qty
@@ -470,6 +576,7 @@ export default function BranchPOS() {
                     }
 
                     setCart([]);
+                    setSelectedCustomer(null);
                     setIsPaymentModalOpen(false);
                     setAmountPaid('');
                   } catch (err: any) {

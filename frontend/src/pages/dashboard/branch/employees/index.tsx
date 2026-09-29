@@ -1,5 +1,6 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { useParams } from 'react-router-dom';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -7,6 +8,8 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  LogIn,
+  LogOut,
   Mail,
   Pencil,
   Phone,
@@ -22,15 +25,30 @@ import {
 type EmployeeStatus = 'Aktif' | 'Cuti';
 type AttendanceStatus = 'Hadir' | 'Terlambat' | 'Belum masuk';
 
-interface Employee {
-  id: number;
+interface EmployeeRecord {
+  id: string;
   name: string;
   email: string;
   phone: string;
   role: string;
   status: EmployeeStatus;
-  attendance: AttendanceStatus;
   shift: string;
+  attendance_status: AttendanceStatus;
+  clock_in: string | null;
+  clock_out: string | null;
+}
+
+interface Employee {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  status: EmployeeStatus;
+  shift: string;
+  attendance: AttendanceStatus;
+  clockIn: string | null;
+  clockOut: string | null;
   initials: string;
   color: string;
 }
@@ -41,7 +59,6 @@ interface EmployeeForm {
   phone: string;
   role: string;
   status: EmployeeStatus;
-  attendance: AttendanceStatus;
   shift: string;
 }
 
@@ -51,18 +68,9 @@ const emptyForm: EmployeeForm = {
   phone: '',
   role: 'Kasir',
   status: 'Aktif',
-  attendance: 'Belum masuk',
   shift: '',
 };
 
-const initialEmployees: Employee[] = [
-  { id: 1, name: 'Aulia Rahma', email: 'aulia.rahma@simpl.id', phone: '0812-3456-7890', role: 'Manajer Toko', status: 'Aktif', attendance: 'Hadir', shift: '08.00 – 16.00', initials: 'AR', color: 'bg-violet-100 text-violet-700' },
-  { id: 2, name: 'Bima Pratama', email: 'bima.pratama@simpl.id', phone: '0813-4567-8901', role: 'Kasir', status: 'Aktif', attendance: 'Hadir', shift: '08.00 – 16.00', initials: 'BP', color: 'bg-sky-100 text-sky-700' },
-  { id: 3, name: 'Citra Lestari', email: 'citra.lestari@simpl.id', phone: '0812-5678-9012', role: 'Kasir', status: 'Aktif', attendance: 'Terlambat', shift: '09.00 – 17.00', initials: 'CL', color: 'bg-rose-100 text-rose-700' },
-  { id: 4, name: 'Dimas Saputra', email: 'dimas.saputra@simpl.id', phone: '0815-6789-0123', role: 'Staf Gudang', status: 'Aktif', attendance: 'Hadir', shift: '08.00 – 16.00', initials: 'DS', color: 'bg-amber-100 text-amber-700' },
-  { id: 5, name: 'Intan Permata', email: 'intan.permata@simpl.id', phone: '0813-7890-1234', role: 'Kasir', status: 'Cuti', attendance: 'Belum masuk', shift: '—', initials: 'IP', color: 'bg-pink-100 text-pink-700' },
-  { id: 6, name: 'Rizky Maulana', email: 'rizky.maulana@simpl.id', phone: '0812-8901-2345', role: 'Staf Gudang', status: 'Aktif', attendance: 'Belum masuk', shift: '12.00 – 20.00', initials: 'RM', color: 'bg-indigo-100 text-indigo-700' },
-];
 
 const avatarColors = [
   'bg-emerald-100 text-emerald-700',
@@ -72,6 +80,7 @@ const avatarColors = [
 ];
 
 const todayLabel = new Intl.DateTimeFormat('id-ID', {
+  timeZone: 'Asia/Jakarta',
   weekday: 'long',
   day: 'numeric',
   month: 'long',
@@ -80,6 +89,30 @@ const todayLabel = new Intl.DateTimeFormat('id-ID', {
 
 function getInitials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? '').join('').toUpperCase();
+}
+
+function mapEmployee(record: EmployeeRecord, colorIndex: number): Employee {
+  return {
+    id: record.id,
+    name: record.name,
+    email: record.email,
+    phone: record.phone,
+    role: record.role,
+    status: record.status,
+    shift: record.shift,
+    attendance: record.attendance_status,
+    clockIn: record.clock_in,
+    clockOut: record.clock_out,
+    initials: getInitials(record.name),
+    color: avatarColors[colorIndex % avatarColors.length],
+  };
+}
+
+function formatClock(value: string | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
 function StatCard({
@@ -116,12 +149,49 @@ function StatCard({
 }
 
 export default function EmployeesIndex() {
-  const [employees, setEmployees] = useState(initialEmployees);
+  const { id: branchId } = useParams();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
+  const [attendanceActionEmployeeId, setAttendanceActionEmployeeId] = useState<string | null>(null);
+  const [pageError, setPageError] = useState('');
+  const [formError, setFormError] = useState('');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua status');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
+
+  useEffect(() => {
+    if (!branchId) return;
+    const controller = new AbortController();
+
+    const loadEmployees = async () => {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches/${branchId}/employees`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Gagal memuat data pegawai.');
+        const records = (payload.data || []) as EmployeeRecord[];
+        setEmployees(records.map((record, index) => mapEmployee(record, index)));
+        setPageError('');
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setEmployees([]);
+          setPageError(error instanceof Error ? error.message : 'Gagal memuat data pegawai.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false);
+      }
+    };
+
+    void loadEmployees();
+    return () => controller.abort();
+  }, [branchId]);
 
   const filteredEmployees = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('id-ID');
@@ -140,9 +210,9 @@ export default function EmployeesIndex() {
   const scheduledEmployees = activeEmployees
     .filter((employee) => employee.shift.trim() !== '' && employee.shift !== '—')
     .sort((first, second) => first.shift.localeCompare(second.shift, 'id-ID'));
-  const presentCount = scheduledEmployees.filter((employee) => employee.attendance === 'Hadir').length;
-  const lateCount = scheduledEmployees.filter((employee) => employee.attendance === 'Terlambat').length;
-  const checkedInCount = presentCount + lateCount;
+  const presentCount = scheduledEmployees.filter((employee) => employee.clockIn && employee.attendance === 'Hadir').length;
+  const lateCount = scheduledEmployees.filter((employee) => employee.clockIn && employee.attendance === 'Terlambat').length;
+  const checkedInCount = scheduledEmployees.filter((employee) => employee.clockIn).length;
   const notArrivedCount = scheduledEmployees.length - checkedInCount;
   const attendanceRate = scheduledEmployees.length
     ? Math.round((checkedInCount / scheduledEmployees.length) * 100)
@@ -151,6 +221,7 @@ export default function EmployeesIndex() {
   const openAddModal = () => {
     setEditingEmployee(null);
     setForm(emptyForm);
+    setFormError('');
     setIsModalOpen(true);
   };
 
@@ -162,46 +233,102 @@ export default function EmployeesIndex() {
       phone: employee.phone,
       role: employee.role,
       status: employee.status,
-      attendance: employee.attendance,
       shift: employee.shift === '—' ? '' : employee.shift,
     });
+    setFormError('');
     setIsModalOpen(true);
   };
 
-  const handleSaveEmployee = (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveEmployee = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const employeeFields = {
-      ...form,
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      shift: form.shift.trim() || '—',
-      initials: getInitials(form.name),
-    };
+    if (!branchId) return;
 
-    if (editingEmployee) {
-      setEmployees((current) => current.map((employee) => employee.id === editingEmployee.id
-        ? { ...employee, ...employeeFields }
-        : employee));
-    } else {
-      setEmployees((current) => [
-        ...current,
+    const isEditing = Boolean(editingEmployee);
+    setIsSubmitting(true);
+    setFormError('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(
+        editingEmployee
+          ? `/api/branches/${branchId}/employees/${editingEmployee.id}`
+          : `/api/branches/${branchId}/employees`,
         {
-          id: Date.now(),
-          ...employeeFields,
-          color: avatarColors[current.length % avatarColors.length],
+          method: isEditing ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            ...form,
+            name: form.name.trim(),
+            email: form.email.trim(),
+            phone: form.phone.trim(),
+            role: form.role.trim(),
+            shift: form.shift.trim(),
+          }),
         },
-      ]);
-    }
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Gagal menyimpan data pegawai.');
 
-    setIsModalOpen(false);
-    setEditingEmployee(null);
-    setForm(emptyForm);
+      if (editingEmployee) {
+        const index = employees.findIndex((employee) => employee.id === editingEmployee.id);
+        const savedEmployee = mapEmployee(payload.employee as EmployeeRecord, Math.max(index, 0));
+        setEmployees((current) => current.map((employee) => employee.id === editingEmployee.id ? savedEmployee : employee));
+      } else {
+        setEmployees((current) => [...current, mapEmployee(payload.employee as EmployeeRecord, current.length)]);
+      }
+      setIsModalOpen(false);
+      setEditingEmployee(null);
+      setForm(emptyForm);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Gagal menyimpan data pegawai.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteEmployee = (employee: Employee) => {
-    if (!window.confirm(`Hapus ${employee.name} dari daftar pegawai?`)) return;
-    setEmployees((current) => current.filter((item) => item.id !== employee.id));
+  const handleDeleteEmployee = async (employee: Employee) => {
+    if (!branchId || !window.confirm(`Hapus ${employee.name} dari daftar pegawai?`)) return;
+    setDeletingEmployeeId(employee.id);
+    setPageError('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(`/api/branches/${branchId}/employees/${employee.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Gagal menghapus data pegawai.');
+      setEmployees((current) => current.filter((item) => item.id !== employee.id));
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'Gagal menghapus data pegawai.');
+    } finally {
+      setDeletingEmployeeId(null);
+    }
+  };
+
+  const handleAttendanceAction = async (employee: Employee, action: 'clock-in' | 'clock-out') => {
+    if (!branchId) return;
+    setAttendanceActionEmployeeId(employee.id);
+    setPageError('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(`/api/branches/${branchId}/employees/${employee.id}/attendance/${action}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Gagal mencatat kehadiran.');
+      const attendance = payload.attendance as { status: AttendanceStatus; clock_in: string | null; clock_out: string | null };
+      setEmployees((current) => current.map((item) => item.id === employee.id
+        ? { ...item, attendance: attendance.status, clockIn: attendance.clock_in, clockOut: attendance.clock_out }
+        : item));
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'Gagal mencatat kehadiran.');
+    } finally {
+      setAttendanceActionEmployeeId(null);
+    }
   };
 
   return (
@@ -228,6 +355,8 @@ export default function EmployeesIndex() {
           Tambah pegawai
         </button>
       </div>
+
+      {pageError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{pageError}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total pegawai" value={String(employees.length)} detail="Pegawai terdaftar" icon={<Users className="h-5 w-5" />} tone="bg-sky-50 text-sky-700" />
@@ -283,7 +412,9 @@ export default function EmployeesIndex() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredEmployees.map((employee) => (
+                {isLoading ? (
+                  <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500">Memuat data pegawai...</td></tr>
+                ) : filteredEmployees.map((employee) => (
                   <tr key={employee.id} className="transition hover:bg-slate-50/70">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -300,10 +431,13 @@ export default function EmployeesIndex() {
                     <td className="px-4 py-4 text-sm text-slate-600">{employee.role}</td>
                     <td className="px-4 py-4 text-sm text-slate-600">{employee.shift || '—'}</td>
                     <td className="px-4 py-4">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${employee.attendance === 'Hadir' ? 'text-emerald-700' : employee.attendance === 'Terlambat' ? 'text-amber-700' : 'text-slate-500'}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${employee.attendance === 'Hadir' ? 'bg-emerald-500' : employee.attendance === 'Terlambat' ? 'bg-amber-500' : 'bg-slate-300'}`} />
-                        {employee.attendance}
-                      </span>
+                      <div>
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${!employee.clockIn ? 'text-slate-500' : employee.attendance === 'Terlambat' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${!employee.clockIn ? 'bg-slate-300' : employee.attendance === 'Terlambat' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                          {!employee.clockIn ? 'Belum clock-in' : employee.attendance}
+                        </span>
+                        {employee.clockIn && <p className="mt-1 text-[10px] text-slate-500">Masuk {formatClock(employee.clockIn)}{employee.clockOut ? ` · Keluar ${formatClock(employee.clockOut)}` : ''}</p>}
+                      </div>
                     </td>
                     <td className="px-5 py-4">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${employee.status === 'Aktif' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
@@ -312,22 +446,32 @@ export default function EmployeesIndex() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-1">
+                        {employee.status === 'Aktif' && employee.shift.trim() !== '' && employee.shift !== '—' && !employee.clockIn && (
+                          <button type="button" onClick={() => handleAttendanceAction(employee, 'clock-in')} disabled={attendanceActionEmployeeId === employee.id} className="rounded-lg p-2 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40" aria-label={`Clock-in ${employee.name}`} title="Clock-in">
+                            <LogIn className="h-4 w-4" />
+                          </button>
+                        )}
+                        {employee.clockIn && !employee.clockOut && (
+                          <button type="button" onClick={() => handleAttendanceAction(employee, 'clock-out')} disabled={attendanceActionEmployeeId === employee.id} className="rounded-lg p-2 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40" aria-label={`Clock-out ${employee.name}`} title="Clock-out">
+                            <LogOut className="h-4 w-4" />
+                          </button>
+                        )}
                         <button type="button" onClick={() => openEditModal(employee)} className="rounded-lg p-2 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-700" aria-label={`Edit ${employee.name}`} title="Edit pegawai">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button type="button" onClick={() => handleDeleteEmployee(employee)} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" aria-label={`Hapus ${employee.name}`} title="Hapus pegawai">
+                        <button type="button" onClick={() => handleDeleteEmployee(employee)} disabled={deletingEmployeeId === employee.id} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40" aria-label={`Hapus ${employee.name}`} title="Hapus pegawai">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {filteredEmployees.length === 0 && (
+                {!isLoading && filteredEmployees.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-5 py-12 text-center">
                       <Users className="mx-auto h-8 w-8 text-slate-300" />
-                      <p className="mt-3 text-sm font-medium text-slate-700">Pegawai tidak ditemukan</p>
-                      <p className="mt-1 text-xs text-slate-500">Coba ubah kata kunci atau filter status.</p>
+                      <p className="mt-3 text-sm font-medium text-slate-700">{employees.length === 0 ? 'Belum ada pegawai' : 'Pegawai tidak ditemukan'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{employees.length === 0 ? 'Tambahkan pegawai untuk mulai mengelola tim cabang.' : 'Coba ubah kata kunci atau filter status.'}</p>
                     </td>
                   </tr>
                 )}
@@ -352,17 +496,19 @@ export default function EmployeesIndex() {
             {scheduledEmployees.length > 0 ? (
               <div className="mt-5 space-y-4">
                 {scheduledEmployees.map((employee, index) => {
-                  const attendanceTone = employee.attendance === 'Hadir'
-                    ? 'bg-emerald-500'
+                  const attendanceTone = !employee.clockIn
+                    ? 'bg-slate-300'
                     : employee.attendance === 'Terlambat'
                       ? 'bg-amber-400'
-                      : 'bg-slate-300';
-                  const attendanceLabel = employee.attendance === 'Hadir'
-                    ? 'Hadir'
+                      : 'bg-emerald-500';
+                  const attendanceLabel = !employee.clockIn
+                    ? 'Belum clock-in'
+                    : `${employee.attendance} · Masuk ${formatClock(employee.clockIn)}${employee.clockOut ? ` · Keluar ${formatClock(employee.clockOut)}` : ''}`;
+                  const attendanceTextTone = !employee.clockIn
+                    ? 'text-slate-400'
                     : employee.attendance === 'Terlambat'
-                      ? 'Terlambat'
-                      : 'Belum masuk';
-                  const attendanceTextTone = employee.attendance === 'Terlambat' ? 'text-amber-600' : 'text-slate-400';
+                      ? 'text-amber-600'
+                      : 'text-emerald-700';
 
                   return (
                     <div key={employee.id} className="flex gap-3">
@@ -400,7 +546,7 @@ export default function EmployeesIndex() {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm"><Clock3 className="h-4 w-4" /></span>
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">Ringkasan kehadiran</h2>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">Berdasarkan jadwal dan status kehadiran pegawai aktif hari ini.</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">Gunakan tombol clock-in saat mulai shift dan clock-out saat selesai. Catatan disimpan per tanggal WIB.</p>
               </div>
             </div>
             <div className="mt-4 flex items-end justify-between border-t border-emerald-100 pt-4">
@@ -410,7 +556,7 @@ export default function EmployeesIndex() {
               </div>
               <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-emerald-700">{checkedInCount} dari {scheduledEmployees.length}</span>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 border-t border-emerald-100 pt-3 text-center">
+            <div className="grid grid-cols-3 gap-2 border-t border-emerald-100 pt-3 text-center">
               <div><p className="text-sm font-semibold text-emerald-700">{presentCount}</p><p className="mt-0.5 text-[10px] text-slate-500">Hadir</p></div>
               <div><p className="text-sm font-semibold text-amber-600">{lateCount}</p><p className="mt-0.5 text-[10px] text-slate-500">Terlambat</p></div>
               <div><p className="text-sm font-semibold text-slate-600">{notArrivedCount}</p><p className="mt-0.5 text-[10px] text-slate-500">Belum masuk</p></div>
@@ -425,11 +571,12 @@ export default function EmployeesIndex() {
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">{editingEmployee ? 'Edit pegawai' : 'Tambah pegawai'}</h2>
-                <p className="mt-1 text-sm text-slate-500">Atur informasi, jadwal, dan kehadiran pegawai.</p>
+                <p className="mt-1 text-sm text-slate-500">Atur profil, status kerja, dan jadwal pegawai.</p>
               </div>
               <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup dialog"><X className="h-5 w-5" /></button>
             </div>
             <form onSubmit={handleSaveEmployee} className="mt-5 space-y-4">
+              {formError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{formError}</p>}
               <label className="block text-sm font-medium text-slate-700">Nama lengkap
                 <input required autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Contoh: Nadia Putri" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
               </label>
@@ -446,24 +593,18 @@ export default function EmployeesIndex() {
               </label>
               <label className="block text-sm font-medium text-slate-700">Jadwal hari ini
                 <input value={form.shift} onChange={(event) => setForm((current) => ({ ...current, shift: event.target.value }))} placeholder="08.00 – 16.00 (kosongkan jika tidak dijadwalkan)" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
+                <p className="mt-1 text-xs font-normal text-slate-400">Clock-in setelah jam mulai shift akan ditandai terlambat.</p>
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block text-sm font-medium text-slate-700">Kehadiran
-                  <select value={form.attendance} onChange={(event) => setForm((current) => ({ ...current, attendance: event.target.value as AttendanceStatus }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50">
-                    <option>Hadir</option><option>Terlambat</option><option>Belum masuk</option>
-                  </select>
-                </label>
-                <label className="block text-sm font-medium text-slate-700">Status
-                  <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as EmployeeStatus }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50">
-                    <option>Aktif</option><option>Cuti</option>
-                  </select>
-                </label>
-              </div>
+              <label className="block text-sm font-medium text-slate-700">Status kerja
+                <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as EmployeeStatus }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50">
+                  <option>Aktif</option><option>Cuti</option>
+                </select>
+              </label>
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100">Batal</button>
-                <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1B9331]">
-                  {editingEmployee ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                  {editingEmployee ? 'Simpan perubahan' : 'Simpan pegawai'}
+                <button type="button" disabled={isSubmitting} onClick={() => setIsModalOpen(false)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-40">Batal</button>
+                <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1B9331] disabled:opacity-60">
+                  {isSubmitting ? <Clock3 className="h-4 w-4 animate-spin" /> : editingEmployee ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {isSubmitting ? 'Menyimpan...' : editingEmployee ? 'Simpan perubahan' : 'Simpan pegawai'}
                 </button>
               </div>
             </form>
