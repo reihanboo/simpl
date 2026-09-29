@@ -456,7 +456,7 @@ export default function BranchDashboard() {
           </div>
         </section>
 
-        <aside className="flex min-h-[400px] flex-col border border-slate-200 bg-white lg:row-span-2">
+        <aside className="flex h-[760px] min-h-0 max-h-[calc(100vh_-_8px)] flex-col overflow-hidden border border-slate-200 bg-white lg:row-span-2">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
             <div>
               <h2 className="text-lg font-semibold">ABAI assistant</h2>
@@ -465,7 +465,7 @@ export default function BranchDashboard() {
             <span className="border border-[#21AC3A]/30 bg-[#21AC3A]/10 px-2.5 py-1 text-xs font-medium text-[#16852A]">Aktif</span>
           </div>
           <div className="flex min-h-0 flex-1 flex-col p-4">
-            <div className="max-h-72 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1" aria-live="polite">
               <div className="flex gap-2.5">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center bg-[#21AC3A] text-white"><Sparkles className="h-4 w-4" /></span>
                 <div className="min-w-0 flex-1 bg-slate-100 p-3 text-xs leading-5 text-slate-700">
