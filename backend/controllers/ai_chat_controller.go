@@ -81,12 +81,19 @@ func PostAIChat(c *gin.Context) {
 	}
 
 	var business models.Business
-	if err := config.DB.Where("id = ? AND owner_id = ?", branch.BusinessID, userID).First(&business).Error; err != nil {
+	if err := config.DB.First(&business, "id = ?", branch.BusinessID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan")
 		} else {
 			utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi bisnis")
 		}
+		return
+	}
+	if allowed, err := userCanAccessBusiness(business.ID, userID); err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi akses bisnis")
+		return
+	} else if !allowed {
+		utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan")
 		return
 	}
 

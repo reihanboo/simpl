@@ -85,6 +85,8 @@ func ConnectDB() {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.Business{},
+		&models.BusinessMember{},
+		&models.BusinessInvitation{},
 		&models.Subscription{},
 		&models.Branch{},
 		&models.Product{},

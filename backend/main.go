@@ -66,6 +66,13 @@ func main() {
 		{
 			business.POST("", controllers.CreateBusiness)
 			business.GET("", controllers.GetBusinesses)
+			business.GET("/invitations", controllers.ListPendingBusinessInvitations)
+			business.POST("/invitations/:id/accept", controllers.AcceptBusinessInvitation)
+			business.POST("/invitations/:id/decline", controllers.DeclineBusinessInvitation)
+			business.GET("/:id/members", controllers.ListBusinessMembers)
+			business.GET("/:id/invitations", controllers.ListBusinessInvitations)
+			business.POST("/:id/invitations", controllers.InviteBusinessMember)
+			business.DELETE("/:id/invitations/:invite_id", controllers.RevokeBusinessInvitation)
 			business.GET("/:id/subscription/upgrade/quote", controllers.GetSubscriptionUpgradeQuote)
 			business.POST("/:id/subscription/upgrade", controllers.CreateSubscriptionUpgrade)
 			business.POST("/:id/subscription/upgrade/confirm", controllers.ConfirmSubscriptionUpgrade)

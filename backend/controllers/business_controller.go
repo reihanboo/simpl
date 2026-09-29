@@ -174,23 +174,46 @@ func GetBusinesses(c *gin.Context) {
 		return
 	}
 
-	var businesses []models.Business
-	if err := config.DB.Where("owner_id = ?", userID).Find(&businesses).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch businesses"})
+	ownerID, validUserID := userID.(uuid.UUID)
+	if !validUserID {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	// We'll create a structured response to match what the frontend expects
+	var businesses []models.Business
+	if err := config.DB.Where("owner_id = ?", ownerID).Find(&businesses).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch businesses"})
+		return
+	}
+	roles := make(map[uuid.UUID]string, len(businesses))
+	for _, business := range businesses {
+		roles[business.ID] = "owner"
+	}
+
+	var coOwnedBusinesses []models.Business
+	if err := config.DB.Joins("JOIN business_members ON business_members.business_id = businesses.id").
+		Where("business_members.user_id = ?", ownerID).Find(&coOwnedBusinesses).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch businesses"})
+		return
+	}
+	for _, business := range coOwnedBusinesses {
+		if _, alreadyIncluded := roles[business.ID]; !alreadyIncluded {
+			roles[business.ID] = "co_owner"
+			businesses = append(businesses, business)
+		}
+	}
+
+	// Preserve the established response shape and expose the user's access role.
 	type BusinessResponse struct {
 		ID           uuid.UUID            `json:"id"`
 		Name         string               `json:"name"`
 		Address      string               `json:"address"`
 		Subscription *models.Subscription `json:"subscription"`
+		Role         string               `json:"role"`
 	}
 
-	var response []BusinessResponse
+	response := make([]BusinessResponse, 0, len(businesses))
 	for _, b := range businesses {
-		// Find subscription manually if Preload fails, but Preload should work if the schema is right
 		var sub models.Subscription
 		config.DB.Where("business_id = ?", b.ID).
 			Order("CASE WHEN LOWER(status) = 'active' THEN 0 ELSE 1 END").
@@ -200,7 +223,8 @@ func GetBusinesses(c *gin.Context) {
 			ID:           b.ID,
 			Name:         b.Name,
 			Address:      b.Address,
-			Subscription: &sub, // include subscription details for frontend
+			Subscription: &sub,
+			Role:         roles[b.ID],
 		})
 	}
 
