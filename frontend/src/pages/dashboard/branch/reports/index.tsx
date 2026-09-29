@@ -831,23 +831,23 @@ export default function BranchReports() {
               className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-300 focus:outline-none focus:border-[#21AC3A] focus:ring-1 focus:ring-[#21AC3A] transition-all"
             />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto">
             {activeTab === 'sales' && (
               <>
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex min-w-0 flex-1 items-center gap-1 text-sm sm:flex-none sm:gap-2">
                   <Calendar className="w-4 h-4 text-slate-400" />
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-white border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-[#21AC3A] transition-all"
+                    className="min-w-0 flex-1 bg-white border border-slate-300 px-1 py-1.5 text-sm outline-none transition-all focus:border-[#21AC3A] sm:flex-none sm:px-2"
                   />
                   <span className="text-slate-400">—</span>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="bg-white border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-[#21AC3A] transition-all"
+                    className="min-w-0 flex-1 bg-white border border-slate-300 px-1 py-1.5 text-sm outline-none transition-all focus:border-[#21AC3A] sm:flex-none sm:px-2"
                   />
                 </div>
               </>

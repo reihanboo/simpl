@@ -268,7 +268,7 @@ export default function BranchPOS() {
   const total = subtotal - totalDiscount;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#f5f5f5] text-slate-800">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#f5f5f5] pb-20 text-slate-800 md:pb-0">
       <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -297,7 +297,7 @@ export default function BranchPOS() {
             className={`flex items-center gap-2 border px-3 py-2 text-sm font-semibold transition-colors ${selectedCustomer ? 'border-[#21AC3A] bg-green-50 text-green-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
           >
             <User className="h-4 w-4" />
-            {selectedCustomer ? selectedCustomer.name : 'Select customer (optional)'}
+            <span className="max-w-[45vw] truncate sm:max-w-none">{selectedCustomer ? selectedCustomer.name : 'Select customer (optional)'}</span>
           </button>
           <button
             type="button"
@@ -311,7 +311,7 @@ export default function BranchPOS() {
       </div>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 p-4 lg:p-6 xl:grid-cols-[minmax(0,1fr)_330px]">
-        <section className="flex min-h-115 flex-col border border-slate-300 bg-white shadow-sm">
+        <section className="order-2 flex h-[60vh] min-h-[360px] flex-col border border-slate-300 bg-white shadow-sm xl:order-1 xl:h-full xl:min-h-115">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 px-4 py-3">
             <div>
               <h2 className="font-bold text-slate-900">Transaction log</h2>
@@ -362,7 +362,7 @@ export default function BranchPOS() {
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full border-collapse text-left">
+            <table className="min-w-[620px] w-full border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="border-b border-slate-300 px-3 py-3">Transaction</th>
@@ -407,7 +407,7 @@ export default function BranchPOS() {
           </div>
         </section>
 
-        <aside className="flex min-h-120 flex-col border border-slate-300 bg-white shadow-sm">
+        <aside className="order-1 flex h-[70vh] min-h-[420px] flex-col border border-slate-300 bg-white shadow-sm xl:order-2 xl:h-full xl:min-h-120">
           <div className="flex items-start justify-between border-b border-slate-300 px-4 py-3">
             <div>
               <h2 className="font-bold text-slate-900">Current sale</h2>

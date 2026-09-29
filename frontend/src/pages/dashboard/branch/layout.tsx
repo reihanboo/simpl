@@ -14,7 +14,7 @@ export default function BranchLayout() {
         {isPos ? (
           <Outlet />
         ) : (
-          <div className="max-w-7xl mx-auto space-y-6 p-4 sm:p-6 lg:p-8 w-full">
+          <div className="mx-auto w-full max-w-7xl space-y-6 p-4 pb-24 sm:p-6 sm:pb-24 md:pb-8 lg:p-8">
             <Outlet />
           </div>
         )}
