@@ -935,10 +935,10 @@ export default function CustomersIndex() {
                   <Loader2 className="h-5 w-5 animate-spin text-[#21AC3A]" /> Memuat detail pelanggan...
                 </div>
               ) : detailError ? (
-                <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detailError}</div>
+                <div role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{detailError}</div>
               ) : detail ? (
                 <>
-                  <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                  <section className="grid gap-4 border border-slate-300 bg-slate-50 p-4 sm:grid-cols-2">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nomor telepon</p>
                       <p className="mt-1 text-sm font-medium text-slate-900">{detail.customer.phone || '—'}</p>
@@ -967,7 +967,7 @@ export default function CustomersIndex() {
                   </section>
 
                   {detail.customer.membership_active && (
-                    <section className="mt-6 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                    <section className="mt-6 border border-amber-200 bg-amber-50/60 p-4">
                       <div className="flex items-center gap-2 font-semibold text-slate-900"><Coins className="h-4 w-4 text-amber-600" /> Kelola poin loyalitas</div>
                       <p className="mt-1 text-xs text-slate-500">Koreksi saldo wajib disertai alasan. Penukaran hanya bisa dilakukan lewat hadiah aktif dengan saldo poin yang mencukupi.</p>
                       <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1.4fr_auto]">
@@ -1022,11 +1022,11 @@ export default function CustomersIndex() {
                       <span className="text-sm text-slate-500">{detail.purchase_history.length.toLocaleString('id-ID')} transaksi</span>
                     </div>
                     {detail.purchase_history.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">Belum ada riwayat pembelian.</div>
+                      <div className="border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">Belum ada riwayat pembelian.</div>
                     ) : (
                       <div className="space-y-3">
                         {detail.purchase_history.map((purchase) => (
-                          <article key={purchase.id} className="rounded-xl border border-slate-200 p-4">
+                          <article key={purchase.id} className="border border-slate-300 p-4">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <p className="font-semibold text-slate-900">{purchase.order_number}</p>

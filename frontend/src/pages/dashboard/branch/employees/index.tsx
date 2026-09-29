@@ -130,13 +130,13 @@ function StatCard({
   trend?: 'up' | 'down';
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/2">
+    <div className="flex min-h-24 flex-col justify-between border border-slate-300 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-slate-500">{label}</p>
+          <p className="text-sm text-slate-600">{label}</p>
           <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
         </div>
-        <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}>{icon}</span>
+        <span className={`flex h-9 w-9 items-center justify-center ${tone}`}>{icon}</span>
       </div>
       <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
         {trend === 'up' && <ArrowUpRight className="h-3.5 w-3.5 text-emerald-600" />}
@@ -310,30 +310,25 @@ export default function EmployeesIndex() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-400">
-            <span>Operasional</span><span>/</span><span className="text-slate-600">Pegawai</span>
+          <div className="mb-3 flex items-center gap-2 text-sm">
+            <span className="font-medium text-[#21AC3A]">SIMPL</span><span className="text-slate-400">/</span><span className="text-slate-500">Manajemen pegawai</span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Manajemen Pegawai</h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-            <span>Kelola tim, jadwal kerja, dan kehadiran dalam satu tempat.</span>
-            <span className="inline-flex items-center gap-1.5 text-xs capitalize text-slate-400">
-              <CalendarDays className="h-3.5 w-3.5" />{todayLabel}
-            </span>
-          </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Manajemen Pegawai</h1>
+          <p className="mt-1 text-sm text-slate-500">Kelola tim, jadwal kerja, dan kehadiran dalam satu tempat. <span className="ml-2 inline-flex items-center gap-1.5 text-xs capitalize text-slate-400"><CalendarDays className="h-3.5 w-3.5" />{todayLabel}</span></p>
         </div>
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1B9331] focus:outline-none focus:ring-4 focus:ring-emerald-100"
+          className="inline-flex min-h-10 items-center justify-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732]"
         >
           <UserPlus className="h-4 w-4" />
           Tambah pegawai
         </button>
-      </div>
+      </header>
 
-      {pageError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{pageError}</p>}
+      {pageError && <p role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{pageError}</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total pegawai" value={String(employees.length)} detail="Pegawai terdaftar" icon={<Users className="h-5 w-5" />} tone="bg-sky-50 text-sky-700" />
@@ -342,9 +337,9 @@ export default function EmployeesIndex() {
         <StatCard label="Terlambat" value={String(lateCount)} detail="Dari pegawai terjadwal" icon={<Clock3 className="h-5 w-5" />} tone="bg-amber-50 text-amber-700" trend="down" />
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/2">
-          <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="min-w-0 overflow-hidden border border-slate-300 bg-white">
+          <div className="flex flex-col gap-3 border-b border-slate-300 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-slate-900">Daftar pegawai</h2>
               <p className="mt-1 text-xs text-slate-500">Informasi, jadwal, dan kehadiran tim</p>
@@ -357,14 +352,14 @@ export default function EmployeesIndex() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Cari nama, kontak, atau peran..."
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 sm:w-56"
+                  className="min-h-10 w-full border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20 sm:w-56"
                 />
               </label>
               <label className="relative block">
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-9 text-sm text-slate-600 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50 sm:w-36"
+                  className="min-h-10 w-full appearance-none border border-slate-300 bg-white py-2 pl-3 pr-9 text-sm text-slate-600 outline-none focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20 sm:w-36"
                   aria-label="Filter berdasarkan status"
                 >
                   <option>Semua status</option>
@@ -377,8 +372,8 @@ export default function EmployeesIndex() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-180 text-left">
-              <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <table className="w-full min-w-180 text-left text-sm">
+              <thead className="border-b border-slate-300 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-5 py-3.5">Pegawai</th>
                   <th className="px-4 py-3.5">Peran</th>
@@ -388,14 +383,14 @@ export default function EmployeesIndex() {
                   <th className="px-5 py-3.5 text-right">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200">
                 {isLoading ? (
                   <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500">Memuat data pegawai...</td></tr>
                 ) : filteredEmployees.map((employee) => (
                   <tr key={employee.id} className="transition hover:bg-slate-50/70">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${employee.color}`}>{employee.initials}</span>
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center border border-slate-200 text-xs font-semibold ${employee.color}`}>{employee.initials}</span>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-800">{employee.name}</p>
                           <div className="mt-1 space-y-0.5">
@@ -424,10 +419,10 @@ export default function EmployeesIndex() {
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-1">
 
-                        <button type="button" onClick={() => openEditModal(employee)} className="rounded-lg p-2 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-700" aria-label={`Edit ${employee.name}`} title="Edit pegawai">
+                        <button type="button" onClick={() => openEditModal(employee)} className="p-2 text-slate-400 transition-colors hover:bg-green-50 hover:text-[#16852B]" aria-label={`Edit ${employee.name}`} title="Edit pegawai">
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button type="button" onClick={() => handleDeleteEmployee(employee)} disabled={deletingEmployeeId === employee.id} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40" aria-label={`Hapus ${employee.name}`} title="Hapus pegawai">
+                        <button type="button" onClick={() => handleDeleteEmployee(employee)} disabled={deletingEmployeeId === employee.id} className="p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`Hapus ${employee.name}`} title="Hapus pegawai">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -446,20 +441,20 @@ export default function EmployeesIndex() {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3.5 text-xs text-slate-500">
+          <div className="flex items-center justify-between border-t border-slate-300 px-4 py-3 text-xs text-slate-500">
             <span>Menampilkan <span className="font-medium text-slate-700">{filteredEmployees.length}</span> dari {employees.length} pegawai</span>
             <span>Data cabang</span>
           </div>
         </section>
 
-        <aside className="space-y-5">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/2">
+        <aside className="space-y-4">
+          <section className="border border-slate-300 bg-white p-4">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="font-semibold text-slate-900">Jadwal hari ini</h2>
                 <p className="mt-1 text-xs text-slate-500">{scheduledEmployees.length} pegawai terjadwal</p>
               </div>
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><CalendarDays className="h-4 w-4" /></span>
+              <span className="flex h-9 w-9 items-center justify-center bg-emerald-50 text-emerald-700"><CalendarDays className="h-4 w-4" /></span>
             </div>
             {scheduledEmployees.length > 0 ? (
               <div className="mt-5 space-y-4">
@@ -486,7 +481,7 @@ export default function EmployeesIndex() {
                       </div>
                       <div className="flex min-w-0 flex-1 items-start justify-between gap-2 pb-1">
                         <div className="flex min-w-0 items-center gap-2.5">
-                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${employee.color}`}>{employee.initials}</span>
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center border border-slate-200 text-[10px] font-semibold ${employee.color}`}>{employee.initials}</span>
                           <div className="min-w-0">
                             <p className="truncate text-xs font-semibold text-slate-800">{employee.name}</p>
                             <p className="mt-0.5 truncate text-[11px] text-slate-500">{employee.role}</p>
@@ -502,29 +497,29 @@ export default function EmployeesIndex() {
                 })}
               </div>
             ) : (
-              <div className="mt-5 rounded-xl bg-slate-50 px-4 py-6 text-center">
+              <div className="mt-5 border border-slate-200 bg-slate-50 px-4 py-6 text-center">
                 <CalendarDays className="mx-auto h-6 w-6 text-slate-300" />
                 <p className="mt-2 text-xs text-slate-500">Belum ada pegawai aktif yang dijadwalkan hari ini.</p>
               </div>
             )}
           </section>
 
-          <section className="rounded-2xl border border-emerald-100 bg-linear-to-br from-emerald-50/80 to-white p-5">
+          <section className="border border-slate-300 bg-white p-4">
             <div className="flex items-start gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm"><Clock3 className="h-4 w-4" /></span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-emerald-50 text-emerald-700"><Clock3 className="h-4 w-4" /></span>
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">Ringkasan kehadiran</h2>
                 <p className="mt-1 text-xs leading-relaxed text-slate-500">Catatan disimpan per tanggal WIB. Kelola clock-in dan clock-out melalui menu Presensi.</p>
               </div>
             </div>
-            <div className="mt-4 flex items-end justify-between border-t border-emerald-100 pt-4">
+            <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-4">
               <div>
                 <p className="text-2xl font-semibold tracking-tight text-slate-900">{attendanceRate}%</p>
                 <p className="mt-0.5 text-xs text-slate-500">sudah mengisi kehadiran</p>
               </div>
-              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-emerald-700">{checkedInCount} dari {scheduledEmployees.length}</span>
+              <span className="border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">{checkedInCount} dari {scheduledEmployees.length}</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 border-t border-emerald-100 pt-3 text-center">
+            <div className="grid grid-cols-3 gap-2 border-t border-slate-200 pt-3 text-center">
               <div><p className="text-sm font-semibold text-emerald-700">{presentCount}</p><p className="mt-0.5 text-[10px] text-slate-500">Hadir</p></div>
               <div><p className="text-sm font-semibold text-amber-600">{lateCount}</p><p className="mt-0.5 text-[10px] text-slate-500">Terlambat</p></div>
               <div><p className="text-sm font-semibold text-slate-600">{notArrivedCount}</p><p className="mt-0.5 text-[10px] text-slate-500">Belum masuk</p></div>
@@ -534,43 +529,61 @@ export default function EmployeesIndex() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsModalOpen(false); }}>
-          <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="my-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-start justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/40" onClick={() => !isSubmitting && setIsModalOpen(false)} />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="employee-dialog-title"
+            className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-300 p-5">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">{editingEmployee ? 'Edit pegawai' : 'Tambah pegawai'}</h2>
+                <h2 id="employee-dialog-title" className="text-lg font-semibold text-slate-900">{editingEmployee ? 'Edit pegawai' : 'Tambah pegawai'}</h2>
                 <p className="mt-1 text-sm text-slate-500">Atur profil, status kerja, dan jadwal pegawai.</p>
               </div>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup dialog"><X className="h-5 w-5" /></button>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                disabled={isSubmitting}
+                className="inline-flex h-10 w-10 items-center justify-center text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#21AC3A] disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Tutup dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <form onSubmit={handleSaveEmployee} className="mt-5 space-y-4">
-              {formError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{formError}</p>}
-              <label className="block text-sm font-medium text-slate-700">Nama lengkap
-                <input required autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Contoh: Nadia Putri" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Email
-                <input required type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="nama@email.com" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Nomor telepon
-                <input required type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="0812-3456-7890" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Peran
-                <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50">
-                  <option>Kasir</option><option>Staf Gudang</option><option>Manajer Toko</option><option>Admin</option>
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Jadwal hari ini
-                <input value={form.shift} onChange={(event) => setForm((current) => ({ ...current, shift: event.target.value }))} placeholder="08.00 – 16.00 (kosongkan jika tidak dijadwalkan)" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50" />
-                <p className="mt-1 text-xs font-normal text-slate-400">Clock-in setelah jam mulai shift akan ditandai terlambat.</p>
-              </label>
-              <label className="block text-sm font-medium text-slate-700">Status kerja
-                <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as EmployeeStatus }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50">
-                  <option>Aktif</option><option>Cuti</option>
-                </select>
-              </label>
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <button type="button" disabled={isSubmitting} onClick={() => setIsModalOpen(false)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-40">Batal</button>
-                <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1B9331] disabled:opacity-60">
+            <form onSubmit={handleSaveEmployee} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+                {formError && <p role="alert" className="border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p>}
+                <label className="block text-sm font-semibold text-slate-700">Nama lengkap
+                  <input required autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Contoh: Nadia Putri" className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">Email
+                  <input required type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="nama@email.com" className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">Nomor telepon
+                  <input required type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="0812-3456-7890" className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">Peran
+                  <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20">
+                    <option>Kasir</option><option>Staf Gudang</option><option>Manajer Toko</option><option>Admin</option>
+                  </select>
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">Jadwal hari ini
+                  <input value={form.shift} onChange={(event) => setForm((current) => ({ ...current, shift: event.target.value }))} placeholder="08.00 – 16.00 (kosongkan jika tidak dijadwalkan)" className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20" />
+                  <p className="mt-1 text-xs font-normal text-slate-500">Clock-in setelah jam mulai shift akan ditandai terlambat.</p>
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">Status kerja
+                  <select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as EmployeeStatus }))} className="mt-1.5 min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal outline-none transition-colors focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20">
+                    <option>Aktif</option><option>Cuti</option>
+                  </select>
+                </label>
+              </div>
+              <div className="flex shrink-0 justify-end gap-3 border-t border-slate-300 bg-slate-50 p-4">
+                <button type="button" disabled={isSubmitting} onClick={() => setIsModalOpen(false)} className="min-h-10 border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Batal</button>
+                <button type="submit" disabled={isSubmitting} className="inline-flex min-h-10 items-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-60">
                   {isSubmitting ? <Clock3 className="h-4 w-4 animate-spin" /> : editingEmployee ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   {isSubmitting ? 'Menyimpan...' : editingEmployee ? 'Simpan perubahan' : 'Simpan pegawai'}
                 </button>
