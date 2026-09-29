@@ -15,6 +15,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 
+const ACTIVE_BUSINESS_STORAGE_KEY = 'activeBusinessId';
+
 declare global {
   interface Window {
     snap: any;
@@ -32,11 +34,13 @@ export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isDashboardHome = location.pathname === '/dashboard';
-  const isBranchRoute = location.pathname.startsWith('/dashboard/branch/');
+  const branchId = location.pathname.match(/^\/dashboard\/branch\/([^/]+)/)?.[1];
+  const isBranchRoute = Boolean(branchId);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
+    localStorage.removeItem(ACTIVE_BUSINESS_STORAGE_KEY);
     navigate('/auth/login');
   };
 
@@ -77,7 +81,10 @@ export default function DashboardLayout() {
               snapToken: b.subscription?.snap_token_midtrans
             }));
             setOrganizations(orgs);
-            setActiveOrg(orgs[0]);
+            const savedBusinessId = localStorage.getItem(ACTIVE_BUSINESS_STORAGE_KEY);
+            const selectedOrg = orgs.find((org: any) => org.id === savedBusinessId) || orgs[0];
+            setActiveOrg(selectedOrg);
+            localStorage.setItem(ACTIVE_BUSINESS_STORAGE_KEY, selectedOrg.id);
 
             // Check if there is any pending payment
             const pendings = orgs.filter((o: any) => o.status === 'pending' && o.snapToken);
@@ -92,6 +99,37 @@ export default function DashboardLayout() {
     };
     fetchUser();
   }, [navigate]);
+
+  React.useEffect(() => {
+    if (!branchId || organizations.length === 0) return;
+
+    const controller = new AbortController();
+    const fetchBranchBusiness = async () => {
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches/${branchId}/dashboard?days=1`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+
+        const data: { branch?: { business_id?: string } } = await response.json();
+        const branchBusinessId = data.branch?.business_id;
+        const branchOrg = organizations.find((org) => org.id === branchBusinessId);
+        if (branchOrg) {
+          setActiveOrg(branchOrg);
+          localStorage.setItem(ACTIVE_BUSINESS_STORAGE_KEY, branchOrg.id);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Failed to resolve branch business', error);
+        }
+      }
+    };
+
+    void fetchBranchBusiness();
+    return () => controller.abort();
+  }, [branchId, organizations]);
 
   const handlePayNow = (snapToken: string) => {
     if (window.snap) {
@@ -230,6 +268,7 @@ export default function DashboardLayout() {
                               key={org.id}
                               onClick={() => {
                                 setActiveOrg(org);
+                                localStorage.setItem(ACTIVE_BUSINESS_STORAGE_KEY, org.id);
                                 setIsOrgDropdownOpen(false);
                               }}
                               className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors text-left"

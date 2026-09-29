@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type OrderItemInput struct {
@@ -96,6 +98,19 @@ func CreateOrder(c *gin.Context) {
 		PaymentMethod:     input.PaymentMethod,
 		PaymentStatus:     "paid",
 		CustomerID:        input.CustomerID,
+	}
+
+	if input.CustomerID != nil {
+		var customer models.Customer
+		if err := tx.Where("id = ? AND business_id = ?", *input.CustomerID, branch.BusinessID).First(&customer).Error; err != nil {
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				utils.RespondError(c, http.StatusNotFound, "Pelanggan tidak ditemukan pada bisnis ini.")
+			} else {
+				utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi pelanggan.")
+			}
+			return
+		}
 	}
 
 	if err := tx.Create(&order).Error; err != nil {

@@ -181,9 +181,10 @@ func GetBranchDashboard(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"branch": gin.H{
-			"id":      branch.ID,
-			"name":    branch.Name,
-			"address": branch.Address,
+			"id":          branch.ID,
+			"business_id": branch.BusinessID,
+			"name":        branch.Name,
+			"address":     branch.Address,
 		},
 		"period_days": days,
 		"metrics": gin.H{

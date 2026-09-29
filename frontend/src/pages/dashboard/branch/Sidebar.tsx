@@ -6,6 +6,7 @@ import {
   Package,
   Users,
   UserCog,
+  Clock3,
   Settings,
   TrendingUp,
   ChevronLeft,
@@ -41,13 +42,14 @@ export default function Sidebar({ branchId }: { branchId: string }) {
     return () => controller.abort();
   }, [branchId]);
   const navItems = [
-    { name: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, path: `/dashboard/branch/${branchId}` },
-    { name: 'Point of Sales (POS)', icon: <ShoppingCart className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/pos` },
-    { name: 'Inventori & Stok', icon: <Package className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/inventory` },
-    { name: 'Pelanggan (CRS)', icon: <Users className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/customers` },
-    { name: 'Pegawai (EMS)', icon: <UserCog className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/employees` },
-    { name: 'Laporan', icon: <TrendingUp className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/reports` },
-    { name: 'Pengaturan', icon: <Settings className="h-5 w-5" />, path: `/dashboard/branch/${branchId}/settings` },
+    { name: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: `/dashboard/branch/${branchId}` },
+    { name: 'Point of Sales (POS)', icon: <ShoppingCart className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/pos` },
+    { name: 'Inventori & Stok', icon: <Package className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/inventory` },
+    { name: 'Pelanggan (CRS)', icon: <Users className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/customers` },
+    { name: 'Pegawai (EMS)', icon: <UserCog className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/employees` },
+    { name: 'Presensi', icon: <Clock3 className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/attendance` },
+    { name: 'Laporan', icon: <TrendingUp className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/reports` },
+    { name: 'Pengaturan', icon: <Settings className="w-5 h-5" />, path: `/dashboard/branch/${branchId}/settings` },
   ];
   const mobilePrimaryItems = navItems.filter((item) =>
     ['Dashboard', 'Point of Sales (POS)', 'Inventori & Stok', 'Laporan'].includes(item.name)
