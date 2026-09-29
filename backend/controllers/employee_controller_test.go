@@ -55,11 +55,57 @@ func TestValidateAttendanceLocationEnforcesGeofence(t *testing.T) {
 		Latitude: &latitude, Longitude: &longitude, AccuracyM: &accuracy,
 	}); !errors.Is(err, errOutsideGeofence) {
 		t.Fatalf("location outside branch should be rejected, got %v", err)
+	} else {
+		var diagnostic *attendanceGeofenceError
+		if !errors.As(err, &diagnostic) {
+			t.Fatalf("outside-geofence error should include diagnostic values, got %T", err)
+		}
+		if diagnostic.RadiusM != branch.GeofenceRadiusM || diagnostic.AccuracyM != accuracy || diagnostic.DistanceM <= float64(branch.GeofenceRadiusM) {
+			t.Errorf("unexpected geofence diagnostic: %+v", diagnostic)
+		}
+	}
+}
+
+func TestValidateAttendanceLocationAccountsForGPSUncertaintyAtBoundary(t *testing.T) {
+	latitude, longitude, accuracy := 0.00105, 0.0, 20.0
+	branchLatitude, branchLongitude := 0.0, 0.0
+	branch := models.Branch{Latitude: &branchLatitude, Longitude: &branchLongitude, GeofenceRadiusM: 100}
+
+	if _, err := validateAttendanceLocation(branch, attendanceLocationInput{
+		Latitude: &latitude, Longitude: &longitude, AccuracyM: &accuracy,
+	}); err != nil {
+		t.Fatalf("location within GPS uncertainty of the geofence should be accepted: %v", err)
+	}
+
+	latitude = 0.0012
+	if _, err := validateAttendanceLocation(branch, attendanceLocationInput{
+		Latitude: &latitude, Longitude: &longitude, AccuracyM: &accuracy,
+	}); !errors.Is(err, errOutsideGeofence) {
+		t.Fatalf("location beyond GPS uncertainty of the geofence should be rejected, got %v", err)
+	}
+}
+
+func TestValidateAttendanceLocationAccepts160mAccuracyWithinLargeGeofence(t *testing.T) {
+	latitude, longitude, accuracy := 0.0454, 0.0, 160.0
+	branchLatitude, branchLongitude := 0.0, 0.0
+	branch := models.Branch{Latitude: &branchLatitude, Longitude: &branchLongitude, GeofenceRadiusM: 5000}
+
+	if _, err := validateAttendanceLocation(branch, attendanceLocationInput{
+		Latitude: &latitude, Longitude: &longitude, AccuracyM: &accuracy,
+	}); err != nil {
+		t.Fatalf("location within GPS uncertainty of a 5 km geofence should be accepted: %v", err)
+	}
+
+	latitude = 0.046
+	if _, err := validateAttendanceLocation(branch, attendanceLocationInput{
+		Latitude: &latitude, Longitude: &longitude, AccuracyM: &accuracy,
+	}); !errors.Is(err, errOutsideGeofence) {
+		t.Fatalf("location outside the capped uncertainty allowance should be rejected, got %v", err)
 	}
 }
 
 func TestValidateAttendanceLocationRequiresConfiguredBranchAndAccurateGPS(t *testing.T) {
-	latitude, longitude, accuracy := 0.0, 0.0, 101.0
+	latitude, longitude, accuracy := 0.0, 0.0, 201.0
 	input := attendanceLocationInput{Latitude: &latitude, Longitude: &longitude, AccuracyM: &accuracy}
 	branch := models.Branch{}
 	if _, err := validateAttendanceLocation(branch, input); !errors.Is(err, errLocationAccuracy) {

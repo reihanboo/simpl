@@ -12,7 +12,7 @@ import {
   Trash2,
   Lock
 } from 'lucide-react';
-
+import { getBestCurrentPosition, LocationCaptureError } from '../../utils/geolocation';
 
 interface BranchRecord {
   id: string;
@@ -161,30 +161,28 @@ export default function DashboardIndex() {
     }
   };
 
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Browser Anda tidak mendukung geolokasi.");
-      return;
-    }
-
+  const handleGetLocation = async () => {
     setIsGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        setMapCenter([lat, lon]);
-        setHasBranchLocation(true);
-        setMapZoom(16);
-        await fetchAddressFromCoords(lat, lon);
-        setIsGettingLocation(false);
-      },
-      (error) => {
-        console.error("Gagal mendapatkan lokasi:", error);
-        alert("Gagal mendapatkan lokasi. Pastikan izin lokasi diberikan.");
-        setIsGettingLocation(false);
-      },
-      { enableHighAccuracy: true }
-    );
+    try {
+      const position = await getBestCurrentPosition();
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      setMapCenter([lat, lon]);
+      setHasBranchLocation(true);
+      setMapZoom(16);
+      await fetchAddressFromCoords(lat, lon);
+    } catch (error) {
+      console.error("Gagal mendapatkan lokasi:", error);
+      if (error instanceof LocationCaptureError && error.code === 'unsupported') {
+        alert("Browser Anda tidak mendukung geolokasi.");
+      } else if (error instanceof LocationCaptureError && error.code === 'permission-denied') {
+        alert("Izin lokasi ditolak. Izinkan akses lokasi di browser untuk memilih lokasi cabang.");
+      } else {
+        alert("Gagal mendapatkan lokasi. Pastikan GPS aktif lalu coba lagi.");
+      }
+    } finally {
+      setIsGettingLocation(false);
+    }
   };
 
   const handleSaveBranch = async (e: React.FormEvent) => {
