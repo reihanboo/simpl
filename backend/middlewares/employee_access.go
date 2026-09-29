@@ -1,6 +1,9 @@
 package middlewares
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -26,6 +29,9 @@ func EmployeeBranchAccessMiddleware() gin.HandlerFunc {
 		err := config.DB.Unscoped().Where("user_id = ?", userID).First(&employee).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
+				if !authorizeBusinessBranchRequest(c, userID) {
+					return
+				}
 				c.Next()
 				return
 			}
@@ -58,6 +64,83 @@ func EmployeeBranchAccessMiddleware() gin.HandlerFunc {
 		c.Set("employeeBranchID", employee.BranchID)
 		c.Next()
 	}
+}
+
+// authorizeBusinessBranchRequest validates both branch-scoped APIs and the
+// branch collection endpoints, which otherwise have no branch ID in the URL.
+func authorizeBusinessBranchRequest(c *gin.Context, userID uuid.UUID) bool {
+	var businessID uuid.UUID
+
+	if branchID := c.Param("id"); branchID != "" {
+		parsedBranchID, err := uuid.Parse(branchID)
+		if err != nil {
+			utils.RespondError(c, http.StatusBadRequest, "ID cabang tidak valid.")
+			c.Abort()
+			return false
+		}
+		var branch models.Branch
+		if err := config.DB.Select("business_id").First(&branch, "id = ?", parsedBranchID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan.")
+			} else {
+				utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi akses cabang.")
+			}
+			c.Abort()
+			return false
+		}
+		businessID = branch.BusinessID
+	} else {
+		var rawBusinessID string
+		switch c.Request.Method {
+		case http.MethodGet:
+			rawBusinessID = c.Query("business_id")
+		case http.MethodPost:
+			body, err := io.ReadAll(io.LimitReader(c.Request.Body, 1<<20))
+			if err != nil {
+				utils.RespondError(c, http.StatusBadRequest, "Data yang diberikan tidak valid.")
+				c.Abort()
+				return false
+			}
+			c.Request.Body = io.NopCloser(bytes.NewReader(body))
+			var payload struct {
+				BusinessID string `json:"business_id"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				utils.RespondError(c, http.StatusBadRequest, "Data yang diberikan tidak valid.")
+				c.Abort()
+				return false
+			}
+			rawBusinessID = payload.BusinessID
+		default:
+			utils.RespondError(c, http.StatusForbidden, "Akses bisnis tidak diizinkan.")
+			c.Abort()
+			return false
+		}
+		parsedBusinessID, err := uuid.Parse(rawBusinessID)
+		if err != nil {
+			utils.RespondError(c, http.StatusBadRequest, "ID bisnis tidak valid.")
+			c.Abort()
+			return false
+		}
+		businessID = parsedBusinessID
+	}
+
+	var count int64
+	if err := config.DB.Model(&models.Business{}).
+		Where("id = ? AND (owner_id = ? OR EXISTS (SELECT 1 FROM business_members WHERE business_members.business_id = businesses.id AND business_members.user_id = ?))", businessID, userID, userID).
+		Count(&count).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi akses bisnis.")
+		c.Abort()
+		return false
+	}
+	if count == 0 {
+		utils.RespondError(c, http.StatusForbidden, "Anda tidak memiliki akses ke cabang ini.")
+		c.Abort()
+		return false
+	}
+
+	c.Set("authorizedBusinessID", businessID)
+	return true
 }
 
 // EmployeeBusinessAccessMiddleware permits staff to read their assigned

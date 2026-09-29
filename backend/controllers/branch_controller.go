@@ -46,16 +46,13 @@ func CreateBranch(c *gin.Context) {
 		return
 	}
 
-	// Optionally we could verify if the user is a member/owner of the business.
-	// For simplicity in this step, we just parse the BusinessID.
-
 	businessUUID, err := uuid.Parse(input.BusinessID)
 	if err != nil {
 		utils.RespondError(c, http.StatusBadRequest, "ID Bisnis tidak valid.")
 		return
 	}
 
-	// Start a transaction since we are creating a branch and its inventory links
+	// Create the branch and its inventory links in one transaction.
 	tx := config.DB.Begin()
 
 	branch := models.Branch{
