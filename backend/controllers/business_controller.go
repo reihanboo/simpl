@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -180,6 +181,37 @@ func GetBusinesses(c *gin.Context) {
 		return
 	}
 
+	var employee models.Employee
+	if err := config.DB.Where("user_id = ? AND status = ?", ownerID, "Aktif").First(&employee).Error; err == nil {
+		var business models.Business
+		if err := config.DB.First(&business, "id = ?", employee.BusinessID).Error; err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat bisnis pegawai.")
+			return
+		}
+		var branch models.Branch
+		if err := config.DB.Select("id", "name").First(&branch, "id = ? AND business_id = ?", employee.BranchID, employee.BusinessID).Error; err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat cabang pegawai.")
+			return
+		}
+		var subscription models.Subscription
+		config.DB.Where("business_id = ?", business.ID).
+			Order("CASE WHEN LOWER(status) = 'active' THEN 0 ELSE 1 END").
+			Order("created_at DESC").First(&subscription)
+		c.JSON(http.StatusOK, gin.H{"businesses": []gin.H{{
+			"id": business.ID, "name": business.Name, "address": business.Address,
+			"subscription": gin.H{
+				"plan_id": subscription.PlanID, "status": subscription.Status,
+				"current_period_end": subscription.CurrentPeriodEnd,
+			},
+			"role": "employee", "branch_id": employee.BranchID,
+			"branch_name": branch.Name, "employee_role": employeeLoginRole(employee.Role),
+		}}})
+		return
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi akun pegawai.")
+		return
+	}
+
 	var businesses []models.Business
 	if err := config.DB.Where("owner_id = ?", ownerID).Find(&businesses).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch businesses"})
@@ -210,6 +242,9 @@ func GetBusinesses(c *gin.Context) {
 		Address      string               `json:"address"`
 		Subscription *models.Subscription `json:"subscription"`
 		Role         string               `json:"role"`
+		BranchID     *uuid.UUID           `json:"branch_id,omitempty"`
+		BranchName   string               `json:"branch_name,omitempty"`
+		EmployeeRole string               `json:"employee_role,omitempty"`
 	}
 
 	response := make([]BusinessResponse, 0, len(businesses))

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 
+	"backend/config"
+	"backend/models"
 	"backend/utils"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +31,18 @@ func AuthMiddleware() gin.HandlerFunc {
 		claims, err := utils.ValidateToken(tokenString)
 		if err != nil {
 			utils.RespondError(c, http.StatusUnauthorized, "Sesi Anda sudah berakhir atau tidak valid. Silakan masuk kembali.")
+			c.Abort()
+			return
+		}
+
+		var user models.User
+		if err := config.DB.Select("id", "requires_password_change").First(&user, "id = ?", claims.UserID).Error; err != nil {
+			utils.RespondError(c, http.StatusUnauthorized, "Akun tidak ditemukan.")
+			c.Abort()
+			return
+		}
+		if user.RequiresPasswordChange && (c.Request.Method != http.MethodPost || c.FullPath() != "/api/auth/change-password") {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Ganti kata sandi awal sebelum menggunakan aplikasi.", "requires_password_change": true})
 			c.Abort()
 			return
 		}

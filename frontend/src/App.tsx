@@ -6,6 +6,7 @@ import LoginPage from './pages/auth/login';
 import RegisterPage from './pages/auth/register';
 import ForgotPasswordPage from './pages/auth/forgot-password';
 import ResetPasswordPage from './pages/auth/reset-password';
+import ChangePasswordPage from './pages/auth/change-password';
 import ProfilePage from './pages/dashboard/profile';
 import DashboardLayout from './components/layout/DashboardLayout';
 import DashboardIndex from './pages/dashboard/index';
@@ -567,6 +568,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route element={<ProtectedRoute />}>
+        <Route path="/auth/change-password" element={<ChangePasswordPage />} />
         <Route path="/onboarding" element={<BusinessSetupPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/dashboard" element={<DashboardLayout />}>

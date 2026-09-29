@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"math"
 	"net/http"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -20,6 +23,8 @@ import (
 var (
 	errEmployeeRequiredFields = errors.New("Nama, email, nomor telepon, dan peran wajib diisi.")
 	errEmployeeStatusInvalid  = errors.New("Status pegawai tidak valid.")
+	errEmployeeRoleInvalid    = errors.New("Peran harus Kasir, Staf Gudang, atau Manajer Toko.")
+	errEmployeeEmailInUse     = errors.New("email pegawai sudah terhubung ke akun lain")
 
 	errEmployeeNotFound    = errors.New("pegawai tidak ditemukan")
 	errEmployeeInactive    = errors.New("pegawai tidak berstatus aktif")
@@ -44,6 +49,8 @@ type employeeInput struct {
 
 type employeeResponse struct {
 	models.Employee
+	LoginUsername     string     `json:"login_username,omitempty"`
+	IsCurrentUser     bool       `json:"is_current_user"`
 	AttendanceStatus  string     `json:"attendance_status"`
 	ClockIn           *time.Time `json:"clock_in"`
 	ClockOut          *time.Time `json:"clock_out"`
@@ -95,9 +102,33 @@ func GetEmployees(c *gin.Context) {
 		attendanceByEmployee[record.EmployeeID] = record
 	}
 
+	userIDs := make([]uuid.UUID, 0, len(employees))
+	for _, employee := range employees {
+		if employee.UserID != nil {
+			userIDs = append(userIDs, *employee.UserID)
+		}
+	}
+	usernames := make(map[uuid.UUID]string, len(userIDs))
+	if len(userIDs) > 0 {
+		var users []models.User
+		if err := config.DB.Select("id", "username").Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat akun login pegawai.")
+			return
+		}
+		for _, user := range users {
+			usernames[user.ID] = user.Username
+		}
+	}
+
+	currentUserIDValue, _ := c.Get("userID")
+	currentUserID, _ := currentUserIDValue.(uuid.UUID)
 	data := make([]employeeResponse, 0, len(employees))
 	for _, employee := range employees {
 		response := employeeResponse{Employee: employee, AttendanceStatus: "Belum masuk"}
+		if employee.UserID != nil {
+			response.LoginUsername = usernames[*employee.UserID]
+			response.IsCurrentUser = *employee.UserID == currentUserID
+		}
 		if attendance, exists := attendanceByEmployee[employee.ID]; exists {
 			response.AttendanceStatus = attendance.Status
 			response.ClockIn = attendance.ClockIn
@@ -133,23 +164,64 @@ func CreateEmployee(c *gin.Context) {
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	employee := models.Employee{
-		BusinessID: businessID,
-		BranchID:   branchID,
-		Name:       input.Name,
-		Email:      input.Email,
-		Phone:      input.Phone,
-		Role:       input.Role,
-		Status:     input.Status,
-		Shift:      input.Shift,
-	}
-	if err := config.DB.Create(&employee).Error; err != nil {
-		utils.RespondError(c, http.StatusInternalServerError, "Gagal menyimpan data pegawai.")
+	if employeeRole, isEmployee := c.Get("employeeRole"); isEmployee && employeeRole == "manager" && input.Role == "Manajer Toko" {
+		utils.RespondError(c, http.StatusForbidden, "Manajer tidak dapat memberikan peran Manajer Toko.")
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"employee": employeeToResponse(employee, nil)})
+	username, err := generateEmployeeUsername()
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Nama pengguna pegawai tidak dapat dibuat.")
+		return
+	}
+	temporaryPassword, err := generateEmployeeTemporaryPassword()
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi awal pegawai tidak dapat dibuat.")
+		return
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(temporaryPassword), bcrypt.DefaultCost)
+	if err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Kata sandi awal pegawai tidak dapat diproses.")
+		return
+	}
+
+	var employee models.Employee
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		var existingUser models.User
+		if err := tx.Where("LOWER(email) = LOWER(?)", input.Email).First(&existingUser).Error; err == nil {
+			return errEmployeeEmailInUse
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
+		user := models.User{
+			Username: username, Email: input.Email, Phone: input.Phone,
+			PasswordHash: string(passwordHash), IsVerified: true, RequiresPasswordChange: true,
+		}
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		employee = models.Employee{
+			BusinessID: businessID, BranchID: branchID, Name: input.Name, Email: input.Email,
+			Phone: input.Phone, Role: input.Role, UserID: &user.ID, Status: input.Status, Shift: input.Shift,
+		}
+		return tx.Create(&employee).Error
+	})
+	if err != nil {
+		if errors.Is(err, errEmployeeEmailInUse) {
+			utils.RespondError(c, http.StatusConflict, "Email pegawai sudah terhubung ke akun SIMPL lain. Gunakan email yang belum terdaftar.")
+			return
+		}
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal membuat pegawai dan akun login.")
+		return
+	}
+
+	response := employeeToResponse(employee, nil)
+	response.LoginUsername = username
+	c.JSON(http.StatusCreated, gin.H{
+		"employee":    response,
+		"credentials": gin.H{"username": username, "temporary_password": temporaryPassword},
+	})
 }
 
 func UpdateEmployee(c *gin.Context) {
@@ -176,6 +248,21 @@ func UpdateEmployee(c *gin.Context) {
 		utils.RespondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	var existingEmployee models.Employee
+	if err := config.DB.Where("id = ? AND business_id = ? AND branch_id = ?", employeeID, businessID, branchID).First(&existingEmployee).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Pegawai tidak ditemukan.")
+		return
+	}
+	actorRoleValue, isEmployee := c.Get("employeeRole")
+	actorRole, _ := actorRoleValue.(string)
+	actorEmployeeIDValue, _ := c.Get("employeeID")
+	actorEmployeeID, _ := actorEmployeeIDValue.(uuid.UUID)
+	currentUserIDValue, _ := c.Get("userID")
+	currentUserID, _ := currentUserIDValue.(uuid.UUID)
+	if isEmployee && actorRole == "manager" && !employeeRoleChangeAllowed(actorRole, actorEmployeeID, existingEmployee.ID, existingEmployee.Role, input.Role) {
+		utils.RespondError(c, http.StatusForbidden, "Manajer tidak dapat mengubah peran akunnya sendiri atau memberikan peran Manajer kepada pegawai lain.")
+		return
+	}
 
 	updates := map[string]interface{}{
 		"name":   input.Name,
@@ -185,15 +272,77 @@ func UpdateEmployee(c *gin.Context) {
 		"status": input.Status,
 		"shift":  input.Shift,
 	}
-	result := config.DB.Model(&models.Employee{}).
-		Where("id = ? AND business_id = ? AND branch_id = ?", employeeID, businessID, branchID).
-		Updates(updates)
-	if result.Error != nil {
-		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui data pegawai.")
+	var username, temporaryPassword string
+	var passwordHash []byte
+	provisionAccount := existingEmployee.UserID == nil
+	if provisionAccount {
+		var err error
+		username, err = generateEmployeeUsername()
+		if err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Nama pengguna pegawai tidak dapat dibuat.")
+			return
+		}
+		temporaryPassword, err = generateEmployeeTemporaryPassword()
+		if err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Kata sandi awal pegawai tidak dapat dibuat.")
+			return
+		}
+		passwordHash, err = bcrypt.GenerateFromPassword([]byte(temporaryPassword), bcrypt.DefaultCost)
+		if err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Kata sandi awal pegawai tidak dapat diproses.")
+			return
+		}
+	}
+
+	updateErr := config.DB.Transaction(func(tx *gorm.DB) error {
+		if provisionAccount {
+			var existingUser models.User
+			if err := tx.Where("LOWER(email) = LOWER(?)", input.Email).First(&existingUser).Error; err == nil {
+				return errEmployeeEmailInUse
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			user := models.User{Username: username, Email: input.Email, Phone: input.Phone, PasswordHash: string(passwordHash), IsVerified: true, RequiresPasswordChange: true}
+			if err := tx.Create(&user).Error; err != nil {
+				return err
+			}
+			updates["user_id"] = user.ID
+		} else {
+			var user models.User
+			if err := tx.First(&user, "id = ?", *existingEmployee.UserID).Error; err != nil {
+				return err
+			}
+			var otherUser models.User
+			if err := tx.Where("LOWER(email) = LOWER(?) AND id <> ?", input.Email, user.ID).First(&otherUser).Error; err == nil {
+				return errEmployeeEmailInUse
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if err := tx.Model(&user).Updates(map[string]interface{}{"email": input.Email, "phone": input.Phone}).Error; err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&models.Employee{}).
+			Where("id = ? AND business_id = ? AND branch_id = ?", employeeID, businessID, branchID).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+	if errors.Is(updateErr, errEmployeeEmailInUse) {
+		utils.RespondError(c, http.StatusConflict, "Email pegawai sudah terhubung ke akun SIMPL lain. Gunakan email yang belum terdaftar.")
 		return
 	}
-	if result.RowsAffected == 0 {
+	if errors.Is(updateErr, gorm.ErrRecordNotFound) {
 		utils.RespondError(c, http.StatusNotFound, "Pegawai tidak ditemukan.")
+		return
+	}
+	if updateErr != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui data pegawai.")
 		return
 	}
 
@@ -220,7 +369,23 @@ func UpdateEmployee(c *gin.Context) {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat kehadiran hari ini.")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"employee": employeeToResponse(employee, attendancePointer)})
+	employeeResult := employeeToResponse(employee, attendancePointer)
+	if employee.UserID != nil {
+		var account models.User
+		if err := config.DB.Select("id", "username").First(&account, "id = ?", *employee.UserID).Error; err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat akun login pegawai.")
+			return
+		}
+		employeeResult.LoginUsername = account.Username
+		employeeResult.IsCurrentUser = account.ID == currentUserID
+	}
+	response := gin.H{"employee": employeeResult}
+	if provisionAccount {
+		employeeResult.LoginUsername = username
+		response["employee"] = employeeResult
+		response["credentials"] = gin.H{"username": username, "temporary_password": temporaryPassword}
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func DeleteEmployee(c *gin.Context) {
@@ -523,15 +688,77 @@ func (input *employeeInput) normalizeAndValidate() error {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Email = strings.TrimSpace(input.Email)
 	input.Phone = strings.TrimSpace(input.Phone)
-	input.Role = strings.TrimSpace(input.Role)
+	input.Role = normalizeEmployeeRole(input.Role)
 	input.Status = strings.TrimSpace(input.Status)
 	input.Shift = strings.TrimSpace(input.Shift)
 
-	if input.Name == "" || input.Email == "" || input.Phone == "" || input.Role == "" {
+	if input.Name == "" || input.Email == "" || input.Phone == "" {
 		return errEmployeeRequiredFields
+	}
+	if input.Role == "" {
+		return errEmployeeRoleInvalid
 	}
 	if input.Status != "Aktif" && input.Status != "Cuti" {
 		return errEmployeeStatusInvalid
 	}
 	return nil
+}
+
+func normalizeEmployeeRole(role string) string {
+	switch employeeLoginRole(role) {
+	case "cashier":
+		return "Kasir"
+	case "warehouse_staff":
+		return "Staf Gudang"
+	case "manager":
+		return "Manajer Toko"
+	default:
+		return ""
+	}
+}
+
+func employeeRoleChangeAllowed(actorRole string, actorID, targetID uuid.UUID, currentRole, requestedRole string) bool {
+	if actorRole != "manager" {
+		return true
+	}
+	requestedRole = employeeLoginRole(requestedRole)
+	if actorID == targetID {
+		return requestedRole == employeeLoginRole(currentRole)
+	}
+	return requestedRole != "manager"
+}
+
+func employeeLoginRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "kasir", "cashier":
+		return "cashier"
+	case "staf gudang", "warehouse staff", "warehouse_staff", "warehouse":
+		return "warehouse_staff"
+	case "manajer toko", "manager toko", "manager", "manajer", "store manager":
+		return "manager"
+	default:
+		return ""
+	}
+}
+
+func generateEmployeeUsername() (string, error) {
+	for range 5 {
+		username := "staff_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		var count int64
+		if err := config.DB.Model(&models.User{}).Where("username = ?", username).Count(&count).Error; err != nil {
+			return "", err
+		}
+		if count == 0 {
+			return username, nil
+		}
+	}
+	return "", errors.New("could not generate unique employee username")
+}
+
+func generateEmployeeTemporaryPassword() (string, error) {
+	secret := make([]byte, 18)
+	if _, err := rand.Read(secret); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(secret), nil
 }
