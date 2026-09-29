@@ -70,6 +70,7 @@ func main() {
 			business.POST("/invitations/:id/accept", controllers.AcceptBusinessInvitation)
 			business.POST("/invitations/:id/decline", controllers.DeclineBusinessInvitation)
 			business.GET("/:id/members", controllers.ListBusinessMembers)
+			business.DELETE("/:id/members/:user_id", controllers.RemoveBusinessMember)
 			business.GET("/:id/invitations", controllers.ListBusinessInvitations)
 			business.POST("/:id/invitations", controllers.InviteBusinessMember)
 			business.DELETE("/:id/invitations/:invite_id", controllers.RevokeBusinessInvitation)
