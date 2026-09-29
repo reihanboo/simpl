@@ -426,7 +426,7 @@ export default function BranchPOS() {
               <div className="relative min-w-0 flex-1">
                 <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#21AC3A]" />
                 <input
-                  autoFocus="true"
+                  autoFocus
                   type="search"
                   placeholder="Scan barcode or search product"
                   value={searchQuery}
