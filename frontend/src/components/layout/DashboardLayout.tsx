@@ -10,27 +10,59 @@ import {
   Plus,
   Settings,
   ShieldCheck,
-  LogOut
+  LogOut,
+  MailCheck,
+  UserRoundPlus,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 
 const ACTIVE_BUSINESS_STORAGE_KEY = 'activeBusinessId';
 
-declare global {
-  interface Window {
-    snap: any;
-  }
-}
+type Organization = {
+  id: string;
+  name: string;
+  plan: string;
+  role: string;
+  status?: string;
+  currentPeriodEnd?: string;
+  snapToken?: string;
+};
+
+type BusinessApiResponse = {
+  id: string;
+  name: string;
+  role?: string;
+  subscription?: {
+    plan_id?: string;
+    status?: string;
+    current_period_end?: string;
+    snap_token_midtrans?: string;
+  };
+};
+
+type BusinessInvitation = {
+  id: string;
+  business_id: string;
+  business_name: string;
+  invited_by_name: string;
+  invited_by_email: string;
+  created_at: string;
+};
+
 
 export default function DashboardLayout() {
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isNotificationDropdownOpen, setIsNotificationDropdownOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [activeOrg, setActiveOrg] = useState<any>(null);
-  const [pendingPaymentOrgs, setPendingPaymentOrgs] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [activeOrg, setActiveOrg] = useState<Organization | null>(null);
+  const [pendingPaymentOrgs, setPendingPaymentOrgs] = useState<Organization[]>([]);
+  const [businessInvitations, setBusinessInvitations] = useState<BusinessInvitation[]>([]);
+  const [invitationActionMessage, setInvitationActionMessage] = useState('');
+  const [respondingInvitationId, setRespondingInvitationId] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const isDashboardHome = location.pathname === '/dashboard';
@@ -65,34 +97,52 @@ export default function DashboardLayout() {
           console.error('Failed to fetch user:', res.statusText);
         }
 
+        let hasBusinesses = false;
+        let businessesLoaded = false;
         const resBusinesses = await fetch('/api/business', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         if (resBusinesses.ok) {
-          const dataBiz = await resBusinesses.json();
-          if (Array.isArray(dataBiz.businesses) && dataBiz.businesses.length > 0) {
-            const orgs = dataBiz.businesses.map((b: any) => ({
+          businessesLoaded = true;
+          const dataBiz: { businesses?: BusinessApiResponse[] } = await resBusinesses.json();
+          const businesses = Array.isArray(dataBiz.businesses) ? dataBiz.businesses : [];
+          hasBusinesses = businesses.length > 0;
+          if (businesses.length > 0) {
+            const orgs = businesses.map((b) => ({
               id: b.id,
               name: b.name,
               plan: b.subscription?.plan_id || 'Unknown',
+              role: b.role || 'owner',
               status: b.subscription?.status,
               currentPeriodEnd: b.subscription?.current_period_end,
               snapToken: b.subscription?.snap_token_midtrans
             }));
             setOrganizations(orgs);
             const savedBusinessId = localStorage.getItem(ACTIVE_BUSINESS_STORAGE_KEY);
-            const selectedOrg = orgs.find((org: any) => org.id === savedBusinessId) || orgs[0];
+            const selectedOrg = orgs.find((org) => org.id === savedBusinessId) || orgs[0];
             setActiveOrg(selectedOrg);
             localStorage.setItem(ACTIVE_BUSINESS_STORAGE_KEY, selectedOrg.id);
 
             // Check if there is any pending payment
-            const pendings = orgs.filter((o: any) => o.status === 'pending' && o.snapToken);
+            const pendings = orgs.filter((org) => org.status === 'pending' && org.snapToken);
             setPendingPaymentOrgs(pendings);
-          } else {
-            navigate('/onboarding', { replace: true });
           }
+        }
+
+        const resInvitations = await fetch('/api/business/invitations', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        let invitations: BusinessInvitation[] = [];
+        if (resInvitations.ok) {
+          const dataInvitations = await resInvitations.json();
+          invitations = Array.isArray(dataInvitations.invitations) ? dataInvitations.invitations : [];
+          setBusinessInvitations(invitations);
+        }
+
+        if (businessesLoaded && !hasBusinesses && invitations.length === 0) {
+          navigate('/onboarding', { replace: true });
         }
       } catch (error) {
         console.error('Error fetching data from backend:', error);
@@ -100,6 +150,28 @@ export default function DashboardLayout() {
     };
     fetchUser();
   }, [navigate]);
+
+  const respondToInvitation = async (invitationId: string, response: 'accept' | 'decline') => {
+    setRespondingInvitationId(invitationId);
+    setInvitationActionMessage('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const result = await fetch(`/api/business/invitations/${invitationId}/${response}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await result.json();
+      if (!result.ok) throw new Error(data.error || 'Undangan belum dapat diproses.');
+      setBusinessInvitations((current) => current.filter((invitation) => invitation.id !== invitationId));
+      if (response === 'accept') {
+        window.location.assign('/dashboard');
+      }
+    } catch (error) {
+      setInvitationActionMessage(error instanceof Error ? error.message : 'Undangan belum dapat diproses.');
+    } finally {
+      setRespondingInvitationId(null);
+    }
+  };
 
   React.useEffect(() => {
     if (!branchId || organizations.length === 0) return;
@@ -135,16 +207,11 @@ export default function DashboardLayout() {
   const handlePayNow = (snapToken: string) => {
     if (window.snap) {
       window.snap.pay(snapToken, {
-        onSuccess: function (result: any) {
-          console.log('Payment success:', result);
+        onSuccess: function () {
           window.location.reload();
         },
-        onPending: function (result: any) {
-          console.log('Payment pending:', result);
-        },
-        onError: function (result: any) {
-          console.log('Payment error:', result);
-        },
+        onPending: function () {},
+        onError: function () {},
         onClose: function () {
           console.log('Payment popup closed');
         }
@@ -274,10 +341,10 @@ export default function DashboardLayout() {
                               }}
                               className="w-full flex items-center justify-between px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors text-left"
                             >
-                              <span className={activeOrg.id === org.id ? "font-semibold text-slate-900" : ""}>
+                              <span className={activeOrg?.id === org.id ? "font-semibold text-slate-900" : ""}>
                                 {org.name}
                               </span>
-                              {activeOrg.id === org.id && <Check className="w-4 h-4 text-[#21AC3A]" />}
+                              {activeOrg?.id === org.id && <Check className="w-4 h-4 text-[#21AC3A]" />}
                             </button>
                           ))}
                         </div>
@@ -315,14 +382,14 @@ export default function DashboardLayout() {
               <button
                 type="button"
                 onClick={() => setIsNotificationDropdownOpen(!isNotificationDropdownOpen)}
-                aria-label={pendingPaymentOrgs.length > 0 ? `Notifikasi pembayaran, ${pendingPaymentOrgs.length} belum dibayar` : 'Notifikasi pembayaran'}
+                aria-label={`Notifikasi${pendingPaymentOrgs.length + businessInvitations.length > 0 ? `, ${pendingPaymentOrgs.length + businessInvitations.length} belum dibaca` : ''}`}
                 aria-expanded={isNotificationDropdownOpen}
                 className={`relative p-2 transition-colors cursor-pointer ${isDashboardHome ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-500 hover:bg-slate-100'} ${isNotificationDropdownOpen ? 'bg-slate-100' : ''}`}
               >
                 <Bell className="h-5 w-5" />
-                {pendingPaymentOrgs.length > 0 && (
+                {pendingPaymentOrgs.length + businessInvitations.length > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center border-2 border-white bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white">
-                    {pendingPaymentOrgs.length > 9 ? '9+' : pendingPaymentOrgs.length}
+                    {pendingPaymentOrgs.length + businessInvitations.length > 9 ? '9+' : pendingPaymentOrgs.length + businessInvitations.length}
                   </span>
                 )}
               </button>
@@ -340,19 +407,42 @@ export default function DashboardLayout() {
                     >
                       <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center">
                         <span className="font-semibold text-slate-900 text-sm">Notifikasi</span>
-                        {pendingPaymentOrgs.length > 0 && (
+                        {pendingPaymentOrgs.length + businessInvitations.length > 0 && (
                           <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            {pendingPaymentOrgs.length} Baru
+                            {pendingPaymentOrgs.length + businessInvitations.length} Baru
                           </span>
                         )}
                       </div>
                       <div className="overflow-y-auto flex-1 p-2">
-                        {pendingPaymentOrgs.length === 0 ? (
+                        {businessInvitations.length === 0 && pendingPaymentOrgs.length === 0 ? (
                           <div className="text-center py-6 text-slate-500 text-sm">
                             Tidak ada notifikasi baru
                           </div>
                         ) : (
-                          pendingPaymentOrgs.map(org => (
+                          <>
+                            {businessInvitations.map((invitation) => (
+                              <div key={invitation.id} className="mb-2 border border-blue-100 bg-blue-50 p-3">
+                                <div className="flex gap-3">
+                                  <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+                                  <div className="min-w-0 flex-1">
+                                    <h4 className="text-sm font-bold text-slate-900">Undangan co-owner</h4>
+                                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                                      <strong>{invitation.invited_by_name}</strong> mengundang Anda untuk mengelola <strong>{invitation.business_name}</strong>.
+                                    </p>
+                                    {invitationActionMessage && <p role="alert" className="mt-2 text-xs text-red-600">{invitationActionMessage}</p>}
+                                    <div className="mt-3 flex gap-2">
+                                      <button type="button" disabled={respondingInvitationId === invitation.id} onClick={() => void respondToInvitation(invitation.id, 'accept')} className="inline-flex items-center gap-1 bg-[#21AC3A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1d9732] disabled:opacity-60">
+                                        <UserRoundPlus className="h-3.5 w-3.5" /> Terima
+                                      </button>
+                                      <button type="button" disabled={respondingInvitationId === invitation.id} onClick={() => void respondToInvitation(invitation.id, 'decline')} className="inline-flex items-center gap-1 border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-60">
+                                        <X className="h-3.5 w-3.5" /> Tolak
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {pendingPaymentOrgs.map(org => (
                             <div key={org.id} className="p-3 mb-2 bg-amber-50 rounded-lg border border-amber-100 relative">
                               <div className="flex gap-3">
                                 <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -364,7 +454,7 @@ export default function DashboardLayout() {
                                   <button
                                     onClick={() => {
                                       setIsNotificationDropdownOpen(false);
-                                      handlePayNow(org.snapToken);
+                                      if (org.snapToken) handlePayNow(org.snapToken);
                                     }}
                                     className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition-colors cursor-pointer"
                                   >
@@ -373,7 +463,8 @@ export default function DashboardLayout() {
                                 </div>
                               </div>
                             </div>
-                          ))
+                          ))}
+                          </>
                         )}
                       </div>
                     </motion.div>

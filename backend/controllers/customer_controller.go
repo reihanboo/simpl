@@ -367,12 +367,19 @@ func getAuthorizedEnterpriseBusiness(c *gin.Context) (uuid.UUID, bool) {
 	}
 
 	var business models.Business
-	if err := config.DB.Where("id = ? AND owner_id = ?", branch.BusinessID, userID).First(&business).Error; err != nil {
+	if err := config.DB.First(&business, "id = ?", branch.BusinessID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan.")
 		} else {
 			utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi bisnis.")
 		}
+		return uuid.Nil, false
+	}
+	if allowed, err := userCanAccessBusiness(business.ID, userID); err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi akses bisnis.")
+		return uuid.Nil, false
+	} else if !allowed {
+		utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan.")
 		return uuid.Nil, false
 	}
 
@@ -391,6 +398,21 @@ func getAuthorizedEnterpriseBusiness(c *gin.Context) (uuid.UUID, bool) {
 
 	utils.RespondError(c, http.StatusForbidden, "Fitur pengelolaan pelanggan hanya tersedia untuk paket Enterprise aktif.")
 	return uuid.Nil, false
+}
+
+func userCanAccessBusiness(businessID, userID uuid.UUID) (bool, error) {
+	var business models.Business
+	if err := config.DB.Select("id", "owner_id").First(&business, "id = ?", businessID).Error; err != nil {
+		return false, err
+	}
+	if business.OwnerID == userID {
+		return true, nil
+	}
+	var count int64
+	if err := config.DB.Model(&models.BusinessMember{}).Where("business_id = ? AND user_id = ?", businessID, userID).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func isEnterprisePlan(planID string) bool {
