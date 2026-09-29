@@ -265,7 +265,7 @@ export default function AttendanceIndex() {
               ) : (
                 <div>
                   <p className="mt-1 text-sm text-amber-700">Lokasi cabang belum diatur. Atur titik dan radius geofence melalui daftar cabang sebelum clock-in/out.</p>
-                  <Link to="/dashboard" className="mt-2 inline-flex text-sm font-semibold text-emerald-700 hover:underline">Buka daftar cabang</Link>
+                  <Link to={branchId ? `/dashboard?editBranch=${encodeURIComponent(branchId)}` : '/dashboard'} className="mt-2 inline-flex text-sm font-semibold text-emerald-700 hover:underline">Atur lokasi cabang</Link>
                 </div>
               )}
               <p className="mt-1 text-xs text-slate-500">Zona waktu cabang: {branch?.timezone || 'Asia/Jakarta'}</p>

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { Map, Marker } from 'pigeon-maps';
 import {
   Search,
@@ -40,6 +40,8 @@ const formatPlanName = (plan?: string) => {
 export default function DashboardIndex() {
   const { activeOrg } = useOutletContext<{ activeOrg: DashboardOrganization }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const branchToEditFromUrl = useRef(searchParams.get('editBranch'));
   const [branches, setBranches] = useState<BranchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,6 +71,21 @@ export default function DashboardIndex() {
     return !query || `${branch.name} ${branch.address || ''}`.toLowerCase().includes(query);
   });
 
+  const openEditModal = useCallback((branch: BranchRecord) => {
+    setEditingBranch(branch);
+    setNewBranchName(branch.name);
+    setNewBranchAddress(branch.address || '');
+    setBranchTimezone(branch.timezone || 'Asia/Jakarta');
+    const hasLocation = branch.latitude != null && branch.longitude != null;
+    setHasBranchLocation(hasLocation);
+    if (branch.latitude != null && branch.longitude != null) {
+      setMapCenter([branch.latitude, branch.longitude]);
+      setMapZoom(16);
+    }
+    setGeofenceRadius(branch.geofence_radius_m || 100);
+    setIsModalOpen(true);
+  }, []);
+
   useEffect(() => {
     if (!activeOrg?.id) return;
 
@@ -83,7 +100,19 @@ export default function DashboardIndex() {
         });
         if (res.ok) {
           const data = await res.json();
-          setBranches(data.branches || []);
+          const loadedBranches: BranchRecord[] = data.branches || [];
+          setBranches(loadedBranches);
+          const branchIdToEdit = branchToEditFromUrl.current;
+          const branchToEdit = loadedBranches.find((branch) => branch.id === branchIdToEdit);
+          if (branchToEdit) {
+            openEditModal(branchToEdit);
+            branchToEditFromUrl.current = null;
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current);
+              next.delete('editBranch');
+              return next;
+            }, { replace: true });
+          }
         } else {
           console.error("Failed to fetch branches");
         }
@@ -95,7 +124,7 @@ export default function DashboardIndex() {
     };
 
     fetchBranches();
-  }, [activeOrg?.id]);
+  }, [activeOrg?.id, openEditModal, setSearchParams]);
 
   useEffect(() => {
     if (!isResizingSidebar) return;
@@ -218,20 +247,7 @@ export default function DashboardIndex() {
     setIsModalOpen(true);
   };
 
-  const openEditModal = (branch: BranchRecord) => {
-    setEditingBranch(branch);
-    setNewBranchName(branch.name);
-    setNewBranchAddress(branch.address || '');
-    setBranchTimezone(branch.timezone || 'Asia/Jakarta');
-    const hasLocation = branch.latitude != null && branch.longitude != null;
-    setHasBranchLocation(hasLocation);
-    if (branch.latitude != null && branch.longitude != null) {
-      setMapCenter([branch.latitude, branch.longitude]);
-      setMapZoom(16);
-    }
-    setGeofenceRadius(branch.geofence_radius_m || 100);
-    setIsModalOpen(true);
-  };
+
 
   const handleDeleteBranch = async () => {
     if (!branchToDelete || isDeletingBranch) return;
