@@ -219,26 +219,21 @@ export default function AttendanceIndex() {
 
   return (
     <div className="space-y-6 pb-8">
-      <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-400">
-            <span>Operasional</span><span>/</span><span className="text-slate-600">Presensi</span>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">Presensi pegawai</h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-            <span>Clock-in dan clock-out dengan verifikasi lokasi cabang.</span>
-            <span className="inline-flex items-center gap-1.5 text-xs capitalize text-slate-400"><CalendarDays className="h-3.5 w-3.5" />{todayLabel}</span>
-          </div>
+      <header className="border-b border-slate-200 pb-4">
+        <div className="mb-3 flex items-center gap-2 text-sm">
+          <span className="font-medium text-[#21AC3A]">SIMPL</span><span className="text-slate-400">/</span><span className="text-slate-500">Operasional</span><span className="text-slate-400">/</span><span className="text-slate-500">Presensi</span>
         </div>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Presensi pegawai</h1>
+        <p className="mt-1 text-sm text-slate-500">Clock-in dan clock-out dengan verifikasi lokasi cabang. <span className="ml-2 inline-flex items-center gap-1.5 text-xs capitalize text-slate-400"><CalendarDays className="h-3.5 w-3.5" />{todayLabel}</span></p>
       </header>
 
-      <div className="flex gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+      <div className="flex gap-3 border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
         <p><span className="font-semibold">Presensi dibantu pengelola.</span> Saat ini akun pegawai dan login mandiri belum tersedia. Lokasi perangkat pengelola diverifikasi untuk setiap pencatatan; fitur ini belum membuktikan bahwa perangkat tersebut dipegang oleh pegawai yang bersangkutan.</p>
       </div>
 
-      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
-      {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
+      {error && <p role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {notice && <p role="status" className="border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{notice}</p>}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -247,17 +242,17 @@ export default function AttendanceIndex() {
           { label: 'Hadir tepat waktu', value: String(presentCount), icon: <Clock3 className="h-5 w-5" />, tone: 'bg-violet-50 text-violet-700' },
           { label: 'Terlambat', value: String(lateCount), icon: <AlertCircle className="h-5 w-5" />, tone: 'bg-amber-50 text-amber-700' },
         ].map((item) => (
-          <div key={item.label} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/2">
-            <div><p className="text-sm font-medium text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p></div>
-            <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>{item.icon}</span>
+          <div key={item.label} className="flex min-h-24 items-center justify-between border border-slate-300 bg-white p-4">
+            <div><p className="text-sm text-slate-600">{item.label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{item.value}</p></div>
+            <span className={`flex h-9 w-9 items-center justify-center ${item.tone}`}>{item.icon}</span>
           </div>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/2">
+      <section className="border border-slate-300 bg-white p-4">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex items-start gap-3">
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${geofenceReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}><MapPin className="h-5 w-5" /></span>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center ${geofenceReady ? 'bg-green-50 text-[#16852B]' : 'bg-amber-50 text-amber-700'}`}><MapPin className="h-5 w-5" /></span>
             <div>
               <h2 className="font-semibold text-slate-900">Area presensi cabang</h2>
               {geofenceReady ? (
@@ -265,32 +260,32 @@ export default function AttendanceIndex() {
               ) : (
                 <div>
                   <p className="mt-1 text-sm text-amber-700">Lokasi cabang belum diatur. Atur titik dan radius geofence melalui daftar cabang sebelum clock-in/out.</p>
-                  <Link to={branchId ? `/dashboard?editBranch=${encodeURIComponent(branchId)}` : '/dashboard'} className="mt-2 inline-flex text-sm font-semibold text-emerald-700 hover:underline">Atur lokasi cabang</Link>
+                  <Link to={branchId ? `/dashboard?editBranch=${encodeURIComponent(branchId)}` : '/dashboard'} className="mt-2 inline-flex text-sm font-semibold text-[#16852B] hover:underline">Atur lokasi cabang</Link>
                 </div>
               )}
               <p className="mt-1 text-xs text-slate-500">Zona waktu cabang: {branch?.timezone || 'Asia/Jakarta'}</p>
             </div>
           </div>
           {geofenceReady && (
-            <a className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800" href={`https://www.google.com/maps?q=${branch.latitude},${branch.longitude}`} target="_blank" rel="noreferrer">
+            <a className="inline-flex items-center gap-2 text-sm font-semibold text-[#16852B] hover:text-[#126c23]" href={`https://www.google.com/maps?q=${branch.latitude},${branch.longitude}`} target="_blank" rel="noreferrer">
               <LocateFixed className="h-4 w-4" />Lihat peta
             </a>
           )}
         </div>
-        {geofenceReady && <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">Setiap clock-in dan clock-out memerlukan akurasi GPS maksimal 100 m dan divalidasi terhadap radius ini oleh server.</p>}
+        {geofenceReady && <p className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500">Setiap clock-in dan clock-out memerlukan akurasi GPS maksimal 100 m dan divalidasi terhadap radius ini oleh server.</p>}
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/2">
-        <div className="border-b border-slate-100 p-5">
+      <section className="overflow-hidden border border-slate-300 bg-white">
+        <div className="border-b border-slate-300 px-4 py-3">
           <h2 className="font-semibold text-slate-900">Jadwal hari ini</h2>
           <p className="mt-1 text-xs text-slate-500">Status dan waktu presensi aktual untuk pegawai aktif yang memiliki shift.</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-190 text-left">
-            <thead className="bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <table className="w-full min-w-190 text-left text-sm">
+            <thead className="border-b border-slate-300 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr><th className="px-5 py-3.5">Pegawai</th><th className="px-4 py-3.5">Shift</th><th className="px-4 py-3.5">Clock-in</th><th className="px-4 py-3.5">Clock-out</th><th className="px-4 py-3.5">Status</th><th className="px-5 py-3.5 text-right">Aksi</th></tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500">Memuat presensi...</td></tr>
               ) : scheduledEmployees.map((employee) => {
@@ -315,11 +310,11 @@ export default function AttendanceIndex() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       {!hasClockedIn ? (
-                        <button type="button" onClick={() => void handlePunch(employee, 'clock-in')} disabled={!geofenceReady || workingEmployeeId === employee.id} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">
+                        <button type="button" onClick={() => void handlePunch(employee, 'clock-in')} disabled={!geofenceReady || workingEmployeeId === employee.id} className="inline-flex min-h-9 items-center gap-1.5 border border-[#21AC3A] bg-[#21AC3A] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-40">
                           <LogIn className="h-3.5 w-3.5" />{workingEmployeeId === employee.id ? 'Memproses...' : 'Clock-in'}
                         </button>
                       ) : !hasClockedOut ? (
-                        <button type="button" onClick={() => void handlePunch(employee, 'clock-out')} disabled={!geofenceReady || workingEmployeeId === employee.id} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40">
+                        <button type="button" onClick={() => void handlePunch(employee, 'clock-out')} disabled={!geofenceReady || workingEmployeeId === employee.id} className="inline-flex min-h-9 items-center gap-1.5 border border-amber-600 bg-amber-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40">
                           <LogOut className="h-3.5 w-3.5" />{workingEmployeeId === employee.id ? 'Memproses...' : 'Clock-out'}
                         </button>
                       ) : <span className="text-xs font-medium text-slate-400">Selesai</span>}
