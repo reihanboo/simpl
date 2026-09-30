@@ -91,6 +91,7 @@ func main() {
 			// Inventory & Products
 			branch.POST("/:id/products", controllers.CreateProduct)
 			branch.GET("/:id/products", controllers.GetProducts)
+			branch.PUT("/:id/products/:product_id", controllers.UpdateProduct)
 			branch.DELETE("/:id/products/:product_id", controllers.DeleteProduct)
 			branch.POST("/:id/products/:product_id/movement", controllers.AddStockMovement)
 			branch.GET("/:id/movements", controllers.GetStockMovements)
