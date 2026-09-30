@@ -106,7 +106,7 @@ func Register(c *gin.Context) {
 		`, user.Email, user.Email, otpCode)
 
 		params := &resend.SendEmailRequest{
-			From:    "noReply@simpl-erm.tech", // Free Resend accounts can only send from this to verified emails
+			From:    "noreply.simpl-erm.tech", // Free Resend accounts can only send from this to verified emails
 			To:      []string{user.Email},
 			Subject: "Kode Autentikasi SIMPL Anda",
 			Html:    htmlBody,
@@ -252,7 +252,7 @@ func ResendOTP(c *gin.Context) {
 		`, user.Email, user.Email, otpCode)
 
 		params := &resend.SendEmailRequest{
-			From:    "noReply@simpl-erm.tech",
+			From:    "noreply.simpl-erm.tech",
 			To:      []string{user.Email},
 			Subject: "Kode Autentikasi SIMPL Anda (Kirim Ulang)",
 			Html:    htmlBody,
@@ -436,7 +436,7 @@ func ForgotPassword(c *gin.Context) {
 		`, user.Email, user.Email, resetLink)
 
 		params := &resend.SendEmailRequest{
-			From:    "noReply@simpl-erm.tech",
+			From:    "noreply.simpl-erm.tech",
 			To:      []string{user.Email},
 			Subject: "Tautan Atur Ulang Kata Sandi SIMPL",
 			Html:    htmlBody,
