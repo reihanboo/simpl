@@ -13,7 +13,18 @@ import {
   LogOut,
   MailCheck,
   UserRoundPlus,
-  X
+  X,
+  ArrowRight,
+  BarChart3,
+  Clock3,
+
+  LayoutDashboard,
+  Loader2,
+  LockKeyhole,
+  Package,
+  ShoppingCart,
+  UserCog,
+  UsersRound,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
@@ -58,6 +69,28 @@ type BusinessInvitation = {
   created_at: string;
 };
 
+type DashboardSearchPage = {
+  id: 'dashboard' | 'branch-dashboard' | 'pos' | 'inventory' | 'customers' | 'employees' | 'attendance' | 'reports' | 'settings' | 'profile';
+  label: string;
+  description: string;
+  keywords: string;
+  path?: string;
+  enterpriseOnly?: boolean;
+  employeeRoles?: string[];
+};
+
+const DASHBOARD_SEARCH_PAGES: DashboardSearchPage[] = [
+  { id: 'dashboard', label: 'Daftar cabang', description: 'Pilih dan kelola cabang bisnis', keywords: 'dashboard bisnis cabang outlet', path: '/dashboard' },
+  { id: 'branch-dashboard', label: 'Dashboard cabang', description: 'Lihat ringkasan performa cabang', keywords: 'overview ringkasan omzet performa' },
+  { id: 'pos', label: 'Kasir / POS', description: 'Buka halaman transaksi penjualan', keywords: 'point of sale kasir cashier transaksi', employeeRoles: ['cashier'] },
+  { id: 'inventory', label: 'Inventori & stok', description: 'Kelola persediaan dan pergerakan stok', keywords: 'inventory stock warehouse gudang produk', employeeRoles: ['warehouse_staff'] },
+  { id: 'customers', label: 'Pelanggan / CRS', description: 'Kelola profil dan loyalitas pelanggan', keywords: 'customer customers pelanggan crm crs loyalitas', enterpriseOnly: true, employeeRoles: ['manager'] },
+  { id: 'employees', label: 'Pegawai / EMS', description: 'Kelola pegawai dan akses peran', keywords: 'employee employees pegawai karyawan ems staff', enterpriseOnly: true, employeeRoles: ['manager'] },
+  { id: 'attendance', label: 'Presensi', description: 'Pantau kehadiran dan jam kerja pegawai', keywords: 'attendance absensi presence clock in clock out', enterpriseOnly: true, employeeRoles: ['manager'] },
+  { id: 'reports', label: 'Laporan', description: 'Lihat laporan penjualan dan inventori', keywords: 'report reports laporan analitik', employeeRoles: [] },
+  { id: 'settings', label: 'Pengaturan cabang', description: 'Atur detail dan preferensi cabang', keywords: 'settings setting pengaturan konfigurasi', employeeRoles: [] },
+  { id: 'profile', label: 'Profil akun', description: 'Ubah informasi akun Anda', keywords: 'profile profil akun email username', path: '/profile', employeeRoles: ['cashier', 'warehouse_staff', 'manager'] },
+];
 
 export default function DashboardLayout() {
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
@@ -70,11 +103,28 @@ export default function DashboardLayout() {
   const [businessInvitations, setBusinessInvitations] = useState<BusinessInvitation[]>([]);
   const [invitationActionMessage, setInvitationActionMessage] = useState('');
   const [respondingInvitationId, setRespondingInvitationId] = useState<string | null>(null);
+  const [headerSearch, setHeaderSearch] = useState('');
+  const [isHeaderSearchOpen, setIsHeaderSearchOpen] = useState(false);
+  const [activeSearchResult, setActiveSearchResult] = useState(0);
+  const [isSearchNavigating, setIsSearchNavigating] = useState(false);
+  const [searchMessage, setSearchMessage] = useState('');
+  const searchContainerRef = React.useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const isDashboardHome = location.pathname === '/dashboard';
   const branchId = location.pathname.match(/^\/dashboard\/branch\/([^/]+)/)?.[1];
   const isBranchRoute = Boolean(branchId);
+  const isEmployeeAccount = activeOrg?.role === 'employee';
+  const employeeSearchRole = isEmployeeAccount ? activeOrg.employeeRole || '' : '';
+  const searchablePages = DASHBOARD_SEARCH_PAGES.filter((page) =>
+    !isEmployeeAccount || Boolean(employeeSearchRole && page.employeeRoles?.includes(employeeSearchRole))
+  );
+  const normalizedSearch = headerSearch.trim().toLocaleLowerCase();
+  const headerSearchResults = normalizedSearch
+    ? searchablePages.filter((page) => `${page.label} ${page.description} ${page.keywords}`.toLocaleLowerCase().includes(normalizedSearch))
+    : [];
+  const normalizedPlan = activeOrg?.plan.trim().toLocaleLowerCase() || '';
+  const hasEnterprisePlan = (normalizedPlan === 'enterprise' || normalizedPlan.startsWith('enterprise_')) && activeOrg?.status?.toLocaleLowerCase() === 'active';
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -89,6 +139,98 @@ export default function DashboardLayout() {
     setIsProfileDropdownOpen(false);
     navigate('/profile');
   };
+
+  const handleSearchPageSelect = async (page: DashboardSearchPage) => {
+    if (page.path) {
+      navigate(page.path);
+      setHeaderSearch('');
+      setIsHeaderSearchOpen(false);
+      setSearchMessage('');
+      return;
+    }
+
+    const isEnterpriseLocked = Boolean(page.enterpriseOnly && activeOrg && !hasEnterprisePlan);
+    if (isEnterpriseLocked && employeeSearchRole) {
+      setSearchMessage('Hubungi pemilik bisnis untuk meng-upgrade paket ke Enterprise.');
+      return;
+    }
+
+    setIsSearchNavigating(true);
+    setSearchMessage('');
+    try {
+      let targetBranchId = branchId || activeOrg?.branchId;
+      if (!targetBranchId && activeOrg?.id) {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches?business_id=${encodeURIComponent(activeOrg.id)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload: { branches?: { id: string }[]; error?: string } = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Cabang tidak dapat dimuat.');
+        targetBranchId = payload.branches?.[0]?.id;
+      }
+
+      if (!targetBranchId) {
+        setSearchMessage('Tambahkan cabang terlebih dahulu untuk membuka halaman ini.');
+        return;
+      }
+
+      const route = isEnterpriseLocked ? 'settings?upgrade=1' : page.id === 'branch-dashboard' ? '' : page.id;
+      navigate(`/dashboard/branch/${targetBranchId}${route ? `/${route}` : ''}`);
+      setHeaderSearch('');
+      setIsHeaderSearchOpen(false);
+    } catch (error) {
+      setSearchMessage(error instanceof Error ? error.message : 'Halaman tidak dapat dibuka.');
+    } finally {
+      setIsSearchNavigating(false);
+    }
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      setIsHeaderSearchOpen(false);
+      return;
+    }
+    if (!headerSearchResults.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveSearchResult((index) => (index + 1) % headerSearchResults.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveSearchResult((index) => (index - 1 + headerSearchResults.length) % headerSearchResults.length);
+    } else if (event.key === 'Enter') {
+      const selectedPage = headerSearchResults[activeSearchResult];
+      if (!selectedPage) return;
+      event.preventDefault();
+      void handleSearchPageSelect(selectedPage);
+    }
+  };
+
+  const getSearchPageIcon = (page: DashboardSearchPage) => {
+    const className = 'h-4 w-4';
+    switch (page.id) {
+      case 'dashboard':
+      case 'branch-dashboard': return <LayoutDashboard className={className} />;
+      case 'pos': return <ShoppingCart className={className} />;
+      case 'inventory': return <Package className={className} />;
+      case 'customers': return <UsersRound className={className} />;
+      case 'employees': return <UserCog className={className} />;
+      case 'attendance': return <Clock3 className={className} />;
+      case 'reports': return <BarChart3 className={className} />;
+      case 'settings': return <Settings className={className} />;
+      case 'profile': return <ShieldCheck className={className} />;
+    }
+  };
+
+  React.useEffect(() => {
+    if (!isHeaderSearchOpen) return;
+    const closeSearchOnOutsideClick = (event: PointerEvent) => {
+      if (!searchContainerRef.current?.contains(event.target as Node)) {
+        setIsHeaderSearchOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', closeSearchOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeSearchOnOutsideClick);
+  }, [isHeaderSearchOpen]);
 
   React.useEffect(() => {
     const fetchUser = async () => {
@@ -404,13 +546,84 @@ export default function DashboardLayout() {
           </div>
 
           <div className={`flex items-center ${isDashboardHome ? 'gap-2' : 'gap-4'}`}>
-            <div className={`relative ${isDashboardHome ? 'hidden' : 'hidden md:block'}`}>
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div ref={searchContainerRef} className="relative hidden md:block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Cari apapun..."
-                className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/50 focus:border-[#21AC3A] transition-all w-64"
+                role="combobox"
+                aria-label="Cari halaman"
+                aria-autocomplete="list"
+                aria-expanded={isHeaderSearchOpen && normalizedSearch.length > 0}
+                aria-controls="dashboard-page-search-results"
+                aria-activedescendant={headerSearchResults[activeSearchResult] ? `dashboard-search-${headerSearchResults[activeSearchResult].id}` : undefined}
+                placeholder="Cari halaman..."
+                value={headerSearch}
+                onChange={(event) => {
+                  setHeaderSearch(event.target.value);
+                  setActiveSearchResult(0);
+                  setSearchMessage('');
+                  setIsHeaderSearchOpen(true);
+                }}
+                onFocus={() => setIsHeaderSearchOpen(true)}
+                onKeyDown={handleSearchKeyDown}
+                className="w-44 border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm transition-all focus:border-[#21AC3A] focus:outline-none focus:ring-2 focus:ring-[#21AC3A]/30 lg:w-64"
               />
+              <AnimatePresence>
+                {isHeaderSearchOpen && normalizedSearch && (
+                  <motion.div
+                    id="dashboard-page-search-results"
+                    role="listbox"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 top-full z-60 mt-1 w-80 overflow-hidden border border-slate-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.13)]"
+                  >
+                    {headerSearchResults.length ? (
+                      <div className="max-h-80 overflow-y-auto p-1">
+                        {headerSearchResults.map((page, index) => {
+                          const isLocked = Boolean(page.enterpriseOnly && activeOrg && !hasEnterprisePlan);
+                          const lockedForEmployee = isLocked && Boolean(employeeSearchRole);
+                          return (
+                            <button
+                              key={page.id}
+                              id={`dashboard-search-${page.id}`}
+                              type="button"
+                              role="option"
+                              aria-selected={activeSearchResult === index}
+                              aria-disabled={lockedForEmployee}
+                              disabled={isSearchNavigating || lockedForEmployee}
+                              onMouseEnter={() => setActiveSearchResult(index)}
+                              onClick={() => void handleSearchPageSelect(page)}
+                              className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${activeSearchResult === index ? 'bg-green-50' : 'hover:bg-slate-50'}`}
+                            >
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center ${isLocked ? 'bg-slate-100 text-slate-500' : 'bg-[#EAF7EC] text-[#21AC3A]'}`}>
+                                {getSearchPageIcon(page)}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-slate-800">{page.label}</span>
+                                <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                  {lockedForEmployee ? 'Hubungi pemilik untuk upgrade Enterprise' : page.description}
+                                </span>
+                              </span>
+                              {isLocked ? <LockKeyhole className="h-4 w-4 shrink-0 text-slate-400" /> : <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="px-4 py-3 text-sm text-slate-500">Tidak ada halaman yang cocok.</p>
+                    )}
+                    {searchMessage && <p role="status" className="border-t border-slate-100 px-4 py-2.5 text-xs text-amber-700">{searchMessage}</p>}
+                    {isSearchNavigating && (
+                      <div className="flex items-center gap-2 border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Membuka halaman...
+                      </div>
+                    )}
+                    <div className="border-t border-slate-100 px-3 py-2 text-[10px] text-slate-400">Gunakan ↑ ↓ untuk memilih · Enter untuk membuka</div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             <div className="relative">
               <button
