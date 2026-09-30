@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simpl-config
+  namespace: simpl
+data:
+  PORT: "8080"
+  DB_HOST: "db"
+  DB_PORT: "5432"
+  DEEPSEEK_BASE_URL: "https://api.deepseek.com"
+  DEEPSEEK_MODEL: "deepseek-chat"
+  FRONTEND_URL: "${FRONTEND_URL}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simpl-backend
+  namespace: simpl
+  labels:
+    app: simpl-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simpl-backend
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: simpl-backend
+    spec:
+      imagePullSecrets:
+        - name: ocir-pull
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z db 5432; do echo waiting for db; sleep 2; done"]
+      containers:
+        - name: backend
+          image: ${BACKEND_IMAGE}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: simpl-config
+            - secretRef:
+                name: simpl-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: simpl
+  labels:
+    app: simpl-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: simpl-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
