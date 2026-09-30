@@ -572,26 +572,26 @@ export default function CustomersIndex() {
         <p className="mt-1 text-sm text-slate-500">Profil, segmen, dan riwayat pembelian pelanggan.</p>
       </header>
 
-      <nav className="mb-6 flex items-center gap-6 border-b border-slate-200" aria-label="Bagian pelanggan">
+      <nav className="mb-4 flex items-center overflow-x-auto border border-slate-200 bg-white" aria-label="Bagian pelanggan" role="tablist">
         <button
           type="button"
+          role="tab"
+          aria-selected={activeSection === 'customers'}
           onClick={() => setActiveSection('customers')}
-          className={`relative pb-3 text-sm font-semibold transition-colors ${activeSection === 'customers' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+          className={`flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${activeSection === 'customers' ? 'bg-green-50 text-[#21AC3A]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
         >
+          <UsersRound className="h-4 w-4" />
           Daftar pelanggan
-          {activeSection === 'customers' && (
-            <motion.div layoutId="customer-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-[#21AC3A]" />
-          )}
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={activeSection === 'loyalty'}
           onClick={() => setActiveSection('loyalty')}
-          className={`relative pb-3 text-sm font-semibold transition-colors ${activeSection === 'loyalty' ? 'text-[#21AC3A]' : 'text-slate-500 hover:text-slate-900'}`}
+          className={`flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${activeSection === 'loyalty' ? 'bg-green-50 text-[#21AC3A]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
         >
+          <Award className="h-4 w-4" />
           Program loyalitas
-          {activeSection === 'loyalty' && (
-            <motion.div layoutId="customer-tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-[#21AC3A]" />
-          )}
         </button>
       </nav>
 
