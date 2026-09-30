@@ -15,12 +15,25 @@ import {
   X,
   Loader2,
   Trash2,
+  Pencil,
   CalendarClock,
   PackagePlus,
   Boxes,
   Timer
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
+
+interface InventoryProduct {
+  id: string;
+  product_id: string;
+  name: string;
+  sku: string;
+  cost_price_idr?: number | null;
+  selling_price_idr: number;
+  low_stock_threshold: number;
+  current_stock: number;
+  status: string;
+}
 
 interface ForecastItem {
   product_id: string;
@@ -68,7 +81,7 @@ export default function BranchInventory() {
   const [forecastFilter, setForecastFilter] = useState('all');
 
   // Data State
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [stockMovements, setStockMovements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -140,8 +153,9 @@ export default function BranchInventory() {
     }
   }, [id, forecastHorizon]);
 
-  // Modal State
+  // Product form modal state
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [productToEdit, setProductToEdit] = useState<InventoryProduct | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -152,27 +166,58 @@ export default function BranchInventory() {
     initial_stock: 0,
   });
 
+  const openAddProductModal = () => {
+    setProductToEdit(null);
+    setFormData({ name: '', sku: '', cost_price_idr: 0, selling_price_idr: 0, low_stock_threshold: 10, initial_stock: 0 });
+    setIsAddProductOpen(true);
+  };
+
+  const openEditProductModal = (product: InventoryProduct) => {
+    setProductToEdit(product);
+    setFormData({
+      name: product.name,
+      sku: product.sku,
+      cost_price_idr: product.cost_price_idr ?? 0,
+      selling_price_idr: product.selling_price_idr ?? 0,
+      low_stock_threshold: product.low_stock_threshold ?? 0,
+      initial_stock: 0,
+    });
+    setIsAddProductOpen(true);
+  };
+
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const res = await fetch(`/api/branches/${id}/products`, {
-        method: 'POST',
+      const isEditing = Boolean(productToEdit);
+      const res = await fetch(isEditing
+        ? `/api/branches/${id}/products/${productToEdit?.product_id}`
+        : `/api/branches/${id}/products`, {
+        method: isEditing ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(isEditing
+          ? {
+              name: formData.name,
+              sku: formData.sku,
+              cost_price_idr: formData.cost_price_idr,
+              selling_price_idr: formData.selling_price_idr,
+              low_stock_threshold: formData.low_stock_threshold,
+            }
+          : formData)
       });
       if (res.ok) {
         setIsAddProductOpen(false);
+        setProductToEdit(null);
         setFormData({ name: '', sku: '', cost_price_idr: 0, selling_price_idr: 0, low_stock_threshold: 10, initial_stock: 0 });
         fetchProductsAndMovements(); // Refresh data
-        toast.success('Produk berhasil ditambahkan!');
+        toast.success(isEditing ? 'Produk berhasil diperbarui!' : 'Produk berhasil ditambahkan!');
       } else {
         const data = await res.json();
-        toast.error(data.error || 'Gagal menambahkan produk');
+        toast.error(data.error || (isEditing ? 'Gagal memperbarui produk' : 'Gagal menambahkan produk'));
       }
     } catch (err) {
       console.error(err);
@@ -308,9 +353,9 @@ export default function BranchInventory() {
 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [productToDelete, setProductToDelete] = useState<any>(null);
+  const [productToDelete, setProductToDelete] = useState<InventoryProduct | null>(null);
 
-  const handleDeleteProductClick = (product: any) => {
+  const handleDeleteProductClick = (product: InventoryProduct) => {
     setProductToDelete(product);
     setIsDeleteModalOpen(true);
   };
@@ -402,7 +447,7 @@ export default function BranchInventory() {
             Sesuaikan stok
           </button>
           <button
-            onClick={() => setIsAddProductOpen(true)}
+            onClick={openAddProductModal}
             className="inline-flex items-center gap-2 border border-[#21AC3A] bg-[#21AC3A] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732]"
           >
             <Plus className="h-4 w-4" />
@@ -606,6 +651,14 @@ export default function BranchInventory() {
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => openEditProductModal(product)}
+                            aria-label={`Edit informasi ${product.name}`}
+                            title="Edit produk"
+                            className="inline-flex min-h-10 min-w-10 items-center justify-center border border-slate-300 bg-white p-2 text-slate-600 transition-colors hover:border-[#21AC3A] hover:bg-green-50 hover:text-[#16852A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#21AC3A] focus-visible:ring-offset-1"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => handleOpenMovementModal(product, 'in')}
                             aria-label={`Catat stok masuk untuk ${product.name}`}
@@ -836,8 +889,8 @@ export default function BranchInventory() {
           >
             <div className="p-5 border-b border-slate-300 flex justify-between items-center shrink-0">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Tambah Produk Baru</h2>
-                <p className="text-sm text-slate-500 mt-1">Tambahkan produk ke dalam katalog master dan set stok awal cabang.</p>
+                <h2 className="text-lg font-semibold text-slate-900">{productToEdit ? 'Edit Informasi Produk' : 'Tambah Produk Baru'}</h2>
+                <p className="text-sm text-slate-500 mt-1">{productToEdit ? 'Perbarui informasi produk. Perubahan berlaku di seluruh cabang bisnis.' : 'Tambahkan produk ke dalam katalog master dan set stok awal cabang.'}</p>
               </div>
               <button
                 onClick={() => !isSubmitting && setIsAddProductOpen(false)}
@@ -855,6 +908,7 @@ export default function BranchInventory() {
                     <input
                       type="text"
                       required
+                      maxLength={255}
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
@@ -867,6 +921,7 @@ export default function BranchInventory() {
                     <input
                       type="text"
                       required
+                      maxLength={100}
                       value={formData.sku}
                       onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                       className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
@@ -874,7 +929,7 @@ export default function BranchInventory() {
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  {!productToEdit && <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">Stok Awal Cabang</label>
                     <input
                       type="number"
@@ -884,7 +939,7 @@ export default function BranchInventory() {
                       className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                       placeholder="0"
                     />
-                  </div>
+                  </div>}
 
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">Harga Modal (Rp)</label>
@@ -921,7 +976,7 @@ export default function BranchInventory() {
                       type="number"
                       min="0"
                       required
-                      value={formData.low_stock_threshold || ''}
+                      value={formData.low_stock_threshold}
                       onChange={(e) => setFormData({ ...formData, low_stock_threshold: parseInt(e.target.value) || 0 })}
                       className="min-h-11 w-full border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-[#21AC3A] focus:ring-2 focus:ring-[#21AC3A]/20"
                       placeholder="10"
@@ -952,7 +1007,7 @@ export default function BranchInventory() {
                     Menyimpan...
                   </>
                 ) : (
-                  'Simpan Produk'
+                  productToEdit ? 'Simpan Perubahan' : 'Simpan Produk'
                 )}
               </button>
             </div>
