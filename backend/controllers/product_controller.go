@@ -1,7 +1,10 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"backend/config"
 	"backend/models"
@@ -85,6 +88,96 @@ type CreateProductInput struct {
 	SellingPriceIDR   int64  `json:"selling_price_idr" binding:"required"`
 	LowStockThreshold int    `json:"low_stock_threshold"`
 	InitialStock      int    `json:"initial_stock"`
+}
+
+type UpdateProductInput struct {
+	Name              string `json:"name" binding:"required"`
+	SKU               string `json:"sku" binding:"required"`
+	CostPriceIDR      int64  `json:"cost_price_idr" binding:"required"`
+	SellingPriceIDR   int64  `json:"selling_price_idr" binding:"required"`
+	LowStockThreshold int    `json:"low_stock_threshold"`
+}
+
+func UpdateProduct(c *gin.Context) {
+	branchID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "ID cabang tidak valid")
+		return
+	}
+
+	productID, err := uuid.Parse(c.Param("product_id"))
+	if err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "ID produk tidak valid")
+		return
+	}
+
+	var branch models.Branch
+	if err := config.DB.Select("id", "business_id").First(&branch, "id = ?", branchID).Error; err != nil {
+		utils.RespondError(c, http.StatusNotFound, "Cabang tidak ditemukan")
+		return
+	}
+
+	var product models.Product
+	if err := config.DB.Where("id = ? AND business_id = ?", productID, branch.BusinessID).First(&product).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			utils.RespondError(c, http.StatusNotFound, "Produk tidak ditemukan di bisnis ini")
+			return
+		}
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memuat produk")
+		return
+	}
+
+	var input UpdateProductInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Data input tidak valid: "+err.Error())
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.SKU = strings.TrimSpace(input.SKU)
+	if input.Name == "" || input.SKU == "" || input.CostPriceIDR < 0 || input.SellingPriceIDR < 0 || input.LowStockThreshold < 0 {
+		utils.RespondError(c, http.StatusBadRequest, "Nama, SKU, dan nilai harga atau batas stok harus valid")
+		return
+	}
+	if utf8.RuneCountInString(input.Name) > 255 || utf8.RuneCountInString(input.SKU) > 100 {
+		utils.RespondError(c, http.StatusBadRequest, "Nama produk maksimal 255 karakter dan SKU maksimal 100 karakter")
+		return
+	}
+
+	var duplicateCount int64
+	if err := config.DB.Model(&models.Product{}).
+		Where("business_id = ? AND sku = ? AND id <> ?", branch.BusinessID, input.SKU, productID).
+		Count(&duplicateCount).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memeriksa SKU produk")
+		return
+	}
+	if duplicateCount > 0 {
+		utils.RespondError(c, http.StatusConflict, "SKU sudah digunakan oleh produk lain")
+		return
+	}
+
+	if err := config.DB.Model(&product).
+		Select("Name", "SKU", "CostPriceIDR", "SellingPriceIDR", "LowStockThreshold").
+		Updates(&models.Product{
+			Name:              input.Name,
+			SKU:               input.SKU,
+			CostPriceIDR:      input.CostPriceIDR,
+			SellingPriceIDR:   input.SellingPriceIDR,
+			LowStockThreshold: input.LowStockThreshold,
+		}).Error; err != nil {
+		log.Printf("failed to update product %s for business %s: %v", productID, branch.BusinessID, err)
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui produk")
+		return
+	}
+	product.Name = input.Name
+	product.SKU = input.SKU
+	product.CostPriceIDR = input.CostPriceIDR
+	product.SellingPriceIDR = input.SellingPriceIDR
+	product.LowStockThreshold = input.LowStockThreshold
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Produk berhasil diperbarui",
+		"product": product,
+	})
 }
 
 func CreateProduct(c *gin.Context) {

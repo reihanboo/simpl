@@ -210,7 +210,7 @@ func employeeRoleAllows(role, method, route string) bool {
 			(route == "/api/branches/:id/customers" && (method == http.MethodGet || method == http.MethodPost))
 	case "warehouse_staff":
 		return (route == "/api/branches/:id/products" && (method == http.MethodGet || method == http.MethodPost)) ||
-			(route == "/api/branches/:id/products/:product_id" && method == http.MethodDelete) ||
+			(route == "/api/branches/:id/products/:product_id" && (method == http.MethodPut || method == http.MethodDelete)) ||
 			(route == "/api/branches/:id/products/:product_id/movement" && method == http.MethodPost) ||
 			(route == "/api/branches/:id/movements" && method == http.MethodGet) ||
 			((route == "/api/branches/:id/forecast" || route == "/api/branches/:id/forecast/series") && method == http.MethodGet)
