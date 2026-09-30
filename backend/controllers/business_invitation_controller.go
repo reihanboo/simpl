@@ -417,7 +417,7 @@ func sendBusinessInvitationEmail(to, businessName string) {
 		<p>If you did not expect this invitation, you can ignore this email. Your inbox is the source of truth for pending invitations.</p>
 	</div>`, html.EscapeString(businessName), html.EscapeString(dashboardURL))
 	_, err := resend.NewClient(apiKey).Emails.Send(&resend.SendEmailRequest{
-		From:    "noreply.simpl-erm.tech",
+		From:    "admin@noreply.simpl-erm.tech",
 		To:      []string{to},
 		Subject: "You are invited to co-own " + businessName + " on SIMPL",
 		Html:    body,
