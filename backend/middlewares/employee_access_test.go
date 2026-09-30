@@ -14,9 +14,11 @@ func TestEmployeeRolePermissions(t *testing.T) {
 		want   bool
 	}{
 		{"cashier can use POS catalog", "Kasir", http.MethodGet, "/api/branches/:id/products", true},
+		{"cashier cannot edit products", "cashier", http.MethodPut, "/api/branches/:id/products/:product_id", false},
 		{"cashier can submit orders", "cashier", http.MethodPost, "/api/branches/:id/orders", true},
 		{"cashier cannot view inventory movements", "cashier", http.MethodGet, "/api/branches/:id/movements", false},
 		{"warehouse can adjust stock", "Staf Gudang", http.MethodPost, "/api/branches/:id/products/:product_id/movement", true},
+		{"warehouse can edit products", "warehouse_staff", http.MethodPut, "/api/branches/:id/products/:product_id", true},
 		{"warehouse cannot submit orders", "warehouse_staff", http.MethodPost, "/api/branches/:id/orders", false},
 		{"manager can manage customers", "Manajer Toko", http.MethodPut, "/api/branches/:id/customers/:customer_id", true},
 		{"english manager label can manage customers", "Manager Toko", http.MethodGet, "/api/branches/:id/customers", true},
