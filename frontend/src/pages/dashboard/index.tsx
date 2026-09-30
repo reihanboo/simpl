@@ -26,6 +26,7 @@ interface BranchRecord {
 
 interface DashboardOrganization {
   id: string;
+  plan?: string;
   status?: string;
 }
 
@@ -54,7 +55,6 @@ export default function DashboardIndex() {
   const [newBranchAddress, setNewBranchAddress] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingBranch, setEditingBranch] = useState<any>(null);
   const [sidebarWidth, setSidebarWidth] = useState(560);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
