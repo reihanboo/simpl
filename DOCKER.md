@@ -35,10 +35,12 @@ Ports and environment settings are controlled via `.env` in the root folder.
 ```env
 FRONTEND_PORT=3000
 BACKEND_PORT=8080
+FRONTEND_URL=https://simpl-erm.tech
 ```
 
 - `FRONTEND_PORT`: Host port mapped to the frontend web server (Default: `3000`).
 - `BACKEND_PORT`: Host port mapped to the backend Go Gin server (Default: `8080`).
+- `FRONTEND_URL`: Public frontend URL used in email links. Production defaults to `https://simpl-erm.tech`; the development Compose file defaults to `http://localhost:3000`.
 
 ---
 
