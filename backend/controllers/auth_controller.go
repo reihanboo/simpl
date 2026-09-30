@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"backend/config"
@@ -403,9 +404,9 @@ func ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	frontendURL := os.Getenv("FRONTEND_URL")
+	frontendURL := strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_URL")), "/")
 	if frontendURL == "" {
-		frontendURL = "http://localhost:3000" // Fallback
+		frontendURL = "https://simpl-erm.tech"
 	}
 	resetLink := fmt.Sprintf("%s/reset-password?token=%s", frontendURL, resetToken)
 
