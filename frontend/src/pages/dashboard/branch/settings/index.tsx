@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { AlertCircle, Check, CreditCard, Crown, LoaderCircle, Mail, ShieldCheck, Trash2, UserRoundPlus, Users } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, CreditCard, Crown, LoaderCircle, Mail, ShieldCheck, Trash2, UserRoundPlus, Users } from 'lucide-react';
 
 interface MidtransSnap {
   pay: (token: string, callbacks: {
@@ -296,6 +296,14 @@ export default function BranchSettings() {
     <div className="space-y-6 text-slate-900">
       <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          <button
+            type="button"
+            onClick={() => navigate(`/dashboard/branch/${branchId}`)}
+            className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition-colors hover:text-[#16852A]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Kembali ke dashboard
+          </button>
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pengaturan bisnis</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">Langganan</h1>
           <p className="mt-1 text-sm text-slate-600">Kelola paket untuk {activeOrg?.name || 'bisnis ini'}.</p>
@@ -505,9 +513,6 @@ export default function BranchSettings() {
         </div>
       )}
 
-      <button type="button" onClick={() => navigate(`/dashboard/branch/${branchId}`)} className="text-sm font-medium text-slate-600 hover:text-slate-900">
-        Kembali ke dashboard
-      </button>
     </div>
   );
 }
