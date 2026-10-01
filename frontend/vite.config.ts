@@ -1,0 +1,30 @@
+import react from '@vitejs/plugin-react'
+import { defineConfig, loadEnv } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
+
+// https://vite.dev/config/
+export default defineConfig(({ mode }) => {
+  const env = { ...process.env, ...loadEnv(mode, process.cwd(), ''), ...loadEnv(mode, '..', '') }
+  const rawHmrPort = env.VITE_HMR_CLIENT_PORT || env.HMR_CLIENT_PORT
+  const parsedHmrPort = rawHmrPort ? Number.parseInt(rawHmrPort, 10) : NaN
+  const isValidHmrPort = !Number.isNaN(parsedHmrPort) && parsedHmrPort > 0
+
+  return {
+    plugins: [react(), tailwindcss()],
+    server: {
+      host: true,
+      port: 5173,
+      watch: {
+        usePolling: true,
+      },
+      allowedHosts: ['e209-2404-c0-d401-4baa-102d-6476-2db7-4a91.ngrok-free.app'],
+      proxy: {
+        '/api': {
+          target: 'http://backend:8080',
+          changeOrigin: true,
+        },
+      },
+      ...(isValidHmrPort ? { hmr: { clientPort: parsedHmrPort } } : {}),
+    },
+  }
+})

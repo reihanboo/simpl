@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: simpl-db
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${DB_NAME:-simpl}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: simpl-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:${BACKEND_PORT:-8080}"
+    environment:
+      - PORT=${BACKEND_PORT:-8080}
+      - FRONTEND_URL=${FRONTEND_URL:-https://simpl-erm.tech}
+      - JWT_SECRET=${JWT_SECRET:-supersecretpassword}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - MIDTRANS_SERVER_KEY=${MIDTRANS_SERVER_KEY:-}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-simpl}
+      - DB_PORT=${DB_PORT:-5432}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_API=${DEEPSEEK_API:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - AI_DB_USER=${AI_DB_USER:-}
+      - AI_DB_PASSWORD=${AI_DB_PASSWORD:-}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: simpl-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
