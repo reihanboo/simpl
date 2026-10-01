@@ -33,6 +33,17 @@ var supportedPaymentMethods = map[string]struct{}{
 	"cash": {}, "qris": {}, "debit": {}, "credit": {}, "transfer": {}, "ewallet": {},
 }
 
+var errInvalidOrderQuantity = errors.New("order item quantity must be positive")
+
+func validateOrderQuantities(items []OrderItemInput) error {
+	for _, item := range items {
+		if item.Qty <= 0 {
+			return errInvalidOrderQuantity
+		}
+	}
+	return nil
+}
+
 func CreateOrder(c *gin.Context) {
 	// Get user from context
 	userIDValue, exists := c.Get("userID")
@@ -65,6 +76,10 @@ func CreateOrder(c *gin.Context) {
 	var input CreateOrderInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.RespondError(c, http.StatusBadRequest, "Data input tidak valid: "+err.Error())
+		return
+	}
+	if err := validateOrderQuantities(input.Items); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Jumlah setiap produk harus minimal 1.")
 		return
 	}
 	input.PaymentMethod = strings.ToLower(strings.TrimSpace(input.PaymentMethod))
@@ -123,9 +138,28 @@ func CreateOrder(c *gin.Context) {
 	for _, itemInput := range input.Items {
 		// Fetch product to get selling price
 		var product models.Product
-		if err := tx.Where("id = ?", itemInput.ProductID).First(&product).Error; err != nil {
+		if err := tx.Where("id = ? AND business_id = ?", itemInput.ProductID, branch.BusinessID).First(&product).Error; err != nil {
 			tx.Rollback()
-			utils.RespondError(c, http.StatusNotFound, "Produk tidak ditemukan: "+itemInput.ProductID.String())
+			utils.RespondError(c, http.StatusNotFound, "Produk tidak ditemukan pada bisnis ini: "+itemInput.ProductID.String())
+			return
+		}
+
+		stockResult := tx.Model(&models.BranchInventory{}).
+			Where("branch_id = ? AND product_id = ? AND current_stock >= ?", branch.ID, product.ID, itemInput.Qty).
+			Update("current_stock", gorm.Expr("current_stock - ?", itemInput.Qty))
+		if stockResult.Error != nil {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui stok produk.")
+			return
+		}
+		if stockResult.RowsAffected == 0 {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusConflict, fmt.Sprintf("Stok produk %s tidak mencukupi untuk jumlah %d.", product.Name, itemInput.Qty))
+			return
+		}
+		if stockResult.RowsAffected != 1 {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusInternalServerError, "Data stok produk pada cabang tidak valid.")
 			return
 		}
 
@@ -143,21 +177,6 @@ func CreateOrder(c *gin.Context) {
 		if err := tx.Create(&orderItem).Error; err != nil {
 			tx.Rollback()
 			utils.RespondError(c, http.StatusInternalServerError, "Gagal mencatat item transaksi")
-			return
-		}
-
-		// Decrease inventory
-		var branchInventory models.BranchInventory
-		if err := tx.Where("branch_id = ? AND product_id = ?", branch.ID, product.ID).First(&branchInventory).Error; err != nil {
-			tx.Rollback()
-			utils.RespondError(c, http.StatusInternalServerError, "Gagal mendapatkan stok produk")
-			return
-		}
-
-		branchInventory.CurrentStock -= itemInput.Qty
-		if err := tx.Save(&branchInventory).Error; err != nil {
-			tx.Rollback()
-			utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui stok produk")
 			return
 		}
 

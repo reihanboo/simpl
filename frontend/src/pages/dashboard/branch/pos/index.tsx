@@ -423,17 +423,25 @@ export default function BranchPOS() {
   };
 
   const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
-      }
-      return [...prev, { id: product.id, name: product.name, price: product.selling_price_idr, qty: 1, discount: 0 }];
-    });
+    const existing = cart.find((item) => item.id === product.id);
+    const currentQty = existing?.qty || 0;
+    if (currentQty >= product.current_stock) {
+      toast.error(product.current_stock > 0 ? `Stok tersedia hanya ${product.current_stock} unit.` : 'Produk ini sedang habis.');
+      return;
+    }
+    setCart((prev) => existing
+      ? prev.map((item) => item.id === product.id ? { ...item, qty: item.qty + 1 } : item)
+      : [...prev, { id: product.id, name: product.name, price: product.selling_price_idr, qty: 1, discount: 0 }]);
   };
 
   const updateQty = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => {
+    const currentItem = cart.find((item) => item.id === id);
+    const product = products.find((item) => item.id === id);
+    if (delta > 0 && currentItem && product && currentItem.qty + delta > product.current_stock) {
+      toast.error(`Stok tersedia hanya ${product.current_stock} unit.`);
+      return;
+    }
+    setCart((prev) => prev.map((item) => {
       if (item.id === id) {
         const newQty = item.qty + delta;
         return newQty > 0 ? { ...item, qty: newQty } : item;
