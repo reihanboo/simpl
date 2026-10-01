@@ -130,6 +130,51 @@ func NewServer(scope Scope) *mcp.Server {
 		return nil, out, err
 	})
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_sales_trend",
+		Description: "Laporan tren penjualan harian untuk cabang ini, termasuk pendapatan, transaksi, diskon, dan jumlah item selama 1-90 hari.",
+		Annotations: readOnly("Tren penjualan harian"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in salesTrendArgs) (*mcp.CallToolResult, salesTrendOutput, error) {
+		out, err := scope.salesTrend(in)
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_payment_method_breakdown",
+		Description: "Laporan jumlah transaksi, pendapatan, diskon, dan kontribusi persentase tiap metode pembayaran selama periode tertentu.",
+		Annotations: readOnly("Laporan metode pembayaran"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in paymentBreakdownArgs) (*mcp.CallToolResult, paymentBreakdownOutput, error) {
+		out, err := scope.paymentMethodBreakdown(in)
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_inventory_valuation",
+		Description: "Ringkasan nilai persediaan cabang berdasarkan harga modal dan harga jual, serta jumlah produk aman, menipis, atau habis.",
+		Annotations: readOnly("Nilai persediaan"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, inventoryValuationOutput, error) {
+		out, err := scope.inventoryValuation()
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_employee_overview",
+		Description: "Ringkasan pegawai cabang berdasarkan status dan peran, tanpa menampilkan informasi kontak pribadi.",
+		Annotations: readOnly("Ringkasan pegawai"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, employeeOverviewOutput, error) {
+		out, err := scope.employeeOverview()
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_attendance_report",
+		Description: "Laporan presensi 1-90 hari terakhir: tren harian, jumlah hadir/terlambat, clock-out, dan pegawai dengan catatan kehadiran terbanyak.",
+		Annotations: readOnly("Laporan presensi"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in attendanceReportArgs) (*mcp.CallToolResult, attendanceReportOutput, error) {
+		out, err := scope.attendanceReport(in)
+		return nil, out, err
+	})
+
 	return server
 }
 
