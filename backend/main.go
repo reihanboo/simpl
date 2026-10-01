@@ -111,6 +111,9 @@ func main() {
 			branch.POST("/:id/employees/:employee_id/attendance/clock-in", controllers.ClockInEmployee)
 			branch.POST("/:id/employees/:employee_id/attendance/clock-out", controllers.ClockOutEmployee)
 
+			branch.GET("/:id/loyalty-settings", controllers.GetLoyaltySettings)
+			branch.PUT("/:id/loyalty-settings", controllers.UpdateLoyaltySettings)
+			branch.GET("/:id/customers/:customer_id/vouchers", controllers.GetCustomerLoyaltyVouchers)
 			branch.POST("/:id/customers/:customer_id/points", controllers.AdjustCustomerPoints)
 			branch.POST("/:id/customers/:customer_id/redeem", controllers.RedeemLoyaltyReward)
 			branch.GET("/:id/loyalty-rewards", controllers.GetLoyaltyRewards)

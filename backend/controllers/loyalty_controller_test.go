@@ -8,6 +8,67 @@ import (
 	"github.com/google/uuid"
 )
 
+func TestCalculateVoucherDiscount(t *testing.T) {
+	maxDiscount := int64(1500)
+	tests := []struct {
+		name         string
+		subtotal     int64
+		discountType string
+		fixedAmount  int64
+		percentage   float64
+		maxDiscount  *int64
+		want         int64
+		wantError    bool
+	}{
+		{name: "fixed discount", subtotal: 10000, discountType: "fixed", fixedAmount: 2000, want: 2000},
+		{name: "fixed discount capped at total", subtotal: 1000, discountType: "fixed", fixedAmount: 2000, want: 1000},
+		{name: "percentage discount", subtotal: 10000, discountType: "percentage", percentage: 10, want: 1000},
+		{name: "percentage maximum applies", subtotal: 20000, discountType: "percentage", percentage: 20, maxDiscount: &maxDiscount, want: 1500},
+		{name: "reject unsupported type", subtotal: 10000, discountType: "other", wantError: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := calculateVoucherDiscount(test.subtotal, test.discountType, test.fixedAmount, test.percentage, test.maxDiscount)
+			if (err != nil) != test.wantError {
+				t.Fatalf("calculateVoucherDiscount() error = %v, wantError %t", err, test.wantError)
+			}
+			if err == nil && got != test.want {
+				t.Fatalf("calculateVoucherDiscount() = %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+func TestCalculateEarnedLoyaltyPoints(t *testing.T) {
+	tests := []struct {
+		name      string
+		amount    int64
+		rate      int64
+		want      int
+		wantError bool
+	}{
+		{name: "below earning threshold", amount: 999, rate: 1000, want: 0},
+		{name: "one point per threshold", amount: 1000, rate: 1000, want: 1},
+		{name: "floor remainder", amount: 2999, rate: 1000, want: 2},
+		{name: "custom threshold", amount: 10000, rate: 2500, want: 4},
+		{name: "reject zero threshold", amount: 1000, rate: 0, wantError: true},
+		{name: "reject excessive points", amount: int64(maxLoyaltyPointsPerAction+1) * 1000, rate: 1000, wantError: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := calculateEarnedLoyaltyPoints(test.amount, test.rate)
+			if (err != nil) != test.wantError {
+				t.Fatalf("calculateEarnedLoyaltyPoints() error = %v, wantError %t", err, test.wantError)
+			}
+			if err == nil && got != test.want {
+				t.Fatalf("calculateEarnedLoyaltyPoints() = %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
 func TestCalculateLoyaltyBalance(t *testing.T) {
 	tests := []struct {
 		name      string
