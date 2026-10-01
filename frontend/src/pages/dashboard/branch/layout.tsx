@@ -2,6 +2,7 @@ import { Outlet, useParams, useLocation, useNavigate, useOutletContext } from 'r
 import { useEffect } from 'react';
 import { LockKeyhole } from 'lucide-react';
 import Sidebar from './Sidebar';
+import ABAIChatWidget from '../../../components/ABAIChatWidget';
 import { normalizeEmployeeRole } from '../../../utils/employee-role';
 
 export default function BranchLayout() {
@@ -66,6 +67,7 @@ export default function BranchLayout() {
           </div>
         )}
       </div>
+      {id && activeOrg?.role !== 'employee' && <ABAIChatWidget key={id} branchId={id} />}
     </div>
   );
 }
