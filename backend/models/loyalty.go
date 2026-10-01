@@ -34,6 +34,22 @@ type LoyaltyRewardCustomer struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type LoyaltyVoucher struct {
+	ID                   uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	BusinessID           uuid.UUID  `gorm:"type:uuid;not null;index" json:"business_id"`
+	CustomerID           uuid.UUID  `gorm:"type:uuid;not null;index" json:"customer_id"`
+	RewardID             *uuid.UUID `gorm:"type:uuid;index" json:"reward_id,omitempty"`
+	RedemptionLogID      uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex" json:"redemption_log_id"`
+	RewardName           string     `gorm:"type:varchar(255);not null" json:"reward_name"`
+	DiscountType         string     `gorm:"type:varchar(20);not null" json:"discount_type"`
+	DiscountAmountIDR    int64      `gorm:"column:discount_amount_idr;not null;default:0" json:"discount_amount_idr"`
+	DiscountPercentage   float64    `gorm:"type:decimal(5,2);not null;default:0" json:"discount_percentage"`
+	MaxDiscountAmountIDR *int64     `gorm:"column:max_discount_amount_idr" json:"max_discount_amount_idr,omitempty"`
+	OrderID              *uuid.UUID `gorm:"type:uuid;index" json:"order_id,omitempty"`
+	UsedAt               *time.Time `json:"used_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+}
+
 type LoyaltyPointLog struct {
 	ID                   uuid.UUID  `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	BusinessID           *uuid.UUID `gorm:"type:uuid;index" json:"business_id,omitempty"`

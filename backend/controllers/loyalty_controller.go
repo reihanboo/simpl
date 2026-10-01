@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -56,7 +57,96 @@ var (
 	errLoyaltyCustomerTargetsInvalid = errors.New("selected customers must be unique, valid, and belong to this business")
 	errLoyaltyIdempotencyConflict    = errors.New("loyalty request id conflict")
 	errLoyaltyPointsLimit            = errors.New("loyalty points limit exceeded")
+	errLoyaltyVoucherUnavailable     = errors.New("loyalty voucher unavailable")
 )
+
+const maxLoyaltyRupiahPerPoint int64 = 1_000_000_000
+
+func GetLoyaltySettings(c *gin.Context) {
+	businessID, ok := getAuthorizedEnterpriseBusiness(c)
+	if !ok {
+		return
+	}
+
+	var business models.Business
+	if err := config.DB.Select("id", "owner_id", "loyalty_rupiah_per_point").First(&business, "id = ?", businessID).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil pengaturan poin loyalitas.")
+		return
+	}
+	userID, ok := currentLoyaltyActorID(c)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"loyalty_rupiah_per_point": business.LoyaltyRupiahPerPoint,
+		"is_owner":                 business.OwnerID == userID,
+	})
+}
+
+func UpdateLoyaltySettings(c *gin.Context) {
+	businessID, ok := getAuthorizedEnterpriseBusiness(c)
+	if !ok {
+		return
+	}
+	userID, ok := currentLoyaltyActorID(c)
+	if !ok {
+		return
+	}
+
+	var business models.Business
+	if err := config.DB.Select("id", "owner_id").First(&business, "id = ?", businessID).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi pemilik bisnis.")
+		return
+	}
+	if business.OwnerID != userID {
+		utils.RespondError(c, http.StatusForbidden, "Hanya pemilik bisnis yang dapat mengubah pengaturan poin.")
+		return
+	}
+
+	var input struct {
+		RupiahPerPoint int64 `json:"loyalty_rupiah_per_point" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil || input.RupiahPerPoint > maxLoyaltyRupiahPerPoint {
+		utils.RespondError(c, http.StatusBadRequest, "Nilai rupiah per poin harus antara Rp1 sampai Rp1.000.000.000.")
+		return
+	}
+	if err := config.DB.Model(&models.Business{}).
+		Where("id = ?", businessID).
+		Update("loyalty_rupiah_per_point", input.RupiahPerPoint).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal menyimpan pengaturan poin loyalitas.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"loyalty_rupiah_per_point": input.RupiahPerPoint, "is_owner": true})
+}
+
+func GetCustomerLoyaltyVouchers(c *gin.Context) {
+	businessID, ok := getAuthorizedEnterpriseBusiness(c)
+	if !ok {
+		return
+	}
+	customerID, ok := parseCustomerID(c)
+	if !ok {
+		return
+	}
+
+	var customer models.Customer
+	if err := config.DB.Select("id").Where("id = ? AND business_id = ?", customerID, businessID).First(&customer).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			utils.RespondError(c, http.StatusNotFound, "Pelanggan tidak ditemukan.")
+		} else {
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi pelanggan.")
+		}
+		return
+	}
+
+	var vouchers []models.LoyaltyVoucher
+	if err := config.DB.Where("business_id = ? AND customer_id = ? AND used_at IS NULL", businessID, customerID).
+		Order("created_at DESC").Find(&vouchers).Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil voucher pelanggan.")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": vouchers})
+}
 
 func GetLoyaltyRewards(c *gin.Context) {
 	businessID, ok := getAuthorizedEnterpriseBusiness(c)
@@ -427,7 +517,21 @@ func RedeemLoyaltyReward(c *gin.Context) {
 			Type:                 "redeemed",
 			RequestID:            &request,
 		}
-		return tx.Create(&entry).Error
+		if err := tx.Create(&entry).Error; err != nil {
+			return err
+		}
+		voucher := models.LoyaltyVoucher{
+			BusinessID:           businessID,
+			CustomerID:           customerID,
+			RewardID:             &rewardRef,
+			RedemptionLogID:      entry.ID,
+			RewardName:           reward.Name,
+			DiscountType:         reward.DiscountType,
+			DiscountAmountIDR:    reward.DiscountAmountIDR,
+			DiscountPercentage:   reward.DiscountPercentage,
+			MaxDiscountAmountIDR: reward.MaxDiscountAmountIDR,
+		}
+		return tx.Create(&voucher).Error
 	})
 	if err != nil {
 		handleLoyaltyMutationError(c, err)
@@ -435,6 +539,46 @@ func RedeemLoyaltyReward(c *gin.Context) {
 	}
 
 	respondLoyaltyMutation(c, businessID, customerID, entry, idempotent)
+}
+
+func calculateVoucherDiscount(subtotalIDR int64, discountType string, discountAmountIDR int64, discountPercentage float64, maxDiscountAmountIDR *int64) (int64, error) {
+	if subtotalIDR < 0 || (maxDiscountAmountIDR != nil && *maxDiscountAmountIDR < 1) {
+		return 0, errLoyaltyVoucherUnavailable
+	}
+
+	var discount int64
+	switch strings.ToLower(strings.TrimSpace(discountType)) {
+	case "fixed":
+		if discountAmountIDR < 1 {
+			return 0, errLoyaltyVoucherUnavailable
+		}
+		discount = discountAmountIDR
+	case "percentage":
+		if math.IsNaN(discountPercentage) || math.IsInf(discountPercentage, 0) || discountPercentage <= 0 || discountPercentage > 100 {
+			return 0, errLoyaltyVoucherUnavailable
+		}
+		discount = int64(math.Round(float64(subtotalIDR) * discountPercentage / 100))
+		if maxDiscountAmountIDR != nil && discount > *maxDiscountAmountIDR {
+			discount = *maxDiscountAmountIDR
+		}
+	default:
+		return 0, errLoyaltyVoucherUnavailable
+	}
+	if discount > subtotalIDR {
+		discount = subtotalIDR
+	}
+	return discount, nil
+}
+
+func calculateEarnedLoyaltyPoints(amountIDR, rupiahPerPoint int64) (int, error) {
+	if amountIDR < 0 || rupiahPerPoint < 1 {
+		return 0, errLoyaltyPointsLimit
+	}
+	points := amountIDR / rupiahPerPoint
+	if points > maxLoyaltyPointsPerAction || points > maxLoyaltyPointBalance {
+		return 0, errLoyaltyPointsLimit
+	}
+	return int(points), nil
 }
 
 func calculateLoyaltyBalance(current, change int) (int, error) {

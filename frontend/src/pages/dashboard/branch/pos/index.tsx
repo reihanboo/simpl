@@ -53,11 +53,21 @@ interface Customer {
   email: string;
 }
 
+interface CustomerVoucher {
+  id: string;
+  reward_name: string;
+  discount_type: 'fixed' | 'percentage';
+  discount_amount_idr: number;
+  discount_percentage: number;
+  max_discount_amount_idr: number | null;
+}
+
 interface HeldTransaction {
   id: string;
   heldAt: string;
   items: CartItem[];
   customer: Customer | null;
+  voucherId?: string | null;
 }
 
 interface Order {
@@ -89,14 +99,26 @@ const localDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const createHeldTransaction = (items: CartItem[], customer: Customer | null): HeldTransaction => {
+const createHeldTransaction = (items: CartItem[], customer: Customer | null, voucherId?: string): HeldTransaction => {
   const heldAt = new Date().toISOString();
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     heldAt,
     items,
     customer,
+    voucherId: voucherId || null,
   };
+};
+
+const calculateVoucherDiscount = (subtotal: number, voucher: CustomerVoucher | undefined) => {
+  if (!voucher || subtotal <= 0) return 0;
+  const rawDiscount = voucher.discount_type === 'percentage'
+    ? Math.round(subtotal * voucher.discount_percentage / 100)
+    : voucher.discount_amount_idr;
+  const cappedDiscount = voucher.max_discount_amount_idr == null
+    ? rawDiscount
+    : Math.min(rawDiscount, voucher.max_discount_amount_idr);
+  return Math.min(subtotal, Math.max(0, cappedDiscount));
 };
 
 const readHeldTransactions = (branchId?: string): HeldTransaction[] => {
@@ -132,6 +154,11 @@ export default function BranchPOS() {
   const [transactionQuery, setTransactionQuery] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerVouchers, setCustomerVouchers] = useState<CustomerVoucher[]>([]);
+  const [voucherContextKey, setVoucherContextKey] = useState('');
+  const [selectedVoucherID, setSelectedVoucherID] = useState('');
+  const [vouchersLoading, setVouchersLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -167,6 +194,41 @@ export default function BranchPOS() {
     const frame = window.requestAnimationFrame(() => { void fetchOrders(); });
     return () => window.cancelAnimationFrame(frame);
   }, [fetchOrders]);
+
+  const selectedCustomerID = selectedCustomer?.id;
+
+  useEffect(() => {
+    if (!branchId || !selectedCustomerID) return;
+    const controller = new AbortController();
+    const loadCustomerVouchers = async () => {
+      setVouchersLoading(true);
+      setVoucherError('');
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches/${branchId}/customers/${selectedCustomerID}/vouchers`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Could not load customer vouchers.');
+        const vouchers: CustomerVoucher[] = payload.data || [];
+        setVoucherContextKey(`${branchId}:${selectedCustomerID}`);
+        setCustomerVouchers(vouchers);
+        setSelectedVoucherID((current) => vouchers.some((voucher) => voucher.id === current) ? current : '');
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setVoucherError(error instanceof Error ? error.message : 'Could not load customer vouchers.');
+          setVoucherContextKey('');
+          setCustomerVouchers([]);
+          setSelectedVoucherID('');
+        }
+      } finally {
+        if (!controller.signal.aborted) setVouchersLoading(false);
+      }
+    };
+    void loadCustomerVouchers();
+    return () => controller.abort();
+  }, [branchId, selectedCustomerID]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -307,10 +369,11 @@ export default function BranchPOS() {
 
   const holdCurrentTransaction = () => {
     if (cart.length === 0) return;
-    const heldTransaction = createHeldTransaction(cart, selectedCustomer);
+    const heldTransaction = createHeldTransaction(cart, selectedCustomer, selectedVoucherID);
     setHeldTransactions((current) => [heldTransaction, ...current]);
     setCart([]);
     setSelectedCustomer(null);
+    setSelectedVoucherID('');
     setSearchQuery('');
     setAmountPaid('');
     toast.success('Transaction held.');
@@ -320,7 +383,7 @@ export default function BranchPOS() {
     if (cart.length > 0 && !window.confirm('Hold the current sale and resume this transaction?')) return;
 
     if (cart.length > 0) {
-      const currentTransaction = createHeldTransaction(cart, selectedCustomer);
+      const currentTransaction = createHeldTransaction(cart, selectedCustomer, selectedVoucherID);
       setHeldTransactions((current) => [
         currentTransaction,
         ...current.filter((item) => item.id !== transaction.id),
@@ -331,6 +394,7 @@ export default function BranchPOS() {
 
     setCart(transaction.items);
     setSelectedCustomer(transaction.customer);
+    setSelectedVoucherID(transaction.voucherId || '');
     setSearchQuery('');
     setAmountPaid('');
     setIsHeldTransactionsOpen(false);
@@ -359,17 +423,25 @@ export default function BranchPOS() {
   };
 
   const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
-      }
-      return [...prev, { id: product.id, name: product.name, price: product.selling_price_idr, qty: 1, discount: 0 }];
-    });
+    const existing = cart.find((item) => item.id === product.id);
+    const currentQty = existing?.qty || 0;
+    if (currentQty >= product.current_stock) {
+      toast.error(product.current_stock > 0 ? `Stok tersedia hanya ${product.current_stock} unit.` : 'Produk ini sedang habis.');
+      return;
+    }
+    setCart((prev) => existing
+      ? prev.map((item) => item.id === product.id ? { ...item, qty: item.qty + 1 } : item)
+      : [...prev, { id: product.id, name: product.name, price: product.selling_price_idr, qty: 1, discount: 0 }]);
   };
 
   const updateQty = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => {
+    const currentItem = cart.find((item) => item.id === id);
+    const product = products.find((item) => item.id === id);
+    if (delta > 0 && currentItem && product && currentItem.qty + delta > product.current_stock) {
+      toast.error(`Stok tersedia hanya ${product.current_stock} unit.`);
+      return;
+    }
+    setCart((prev) => prev.map((item) => {
       if (item.id === id) {
         const newQty = item.qty + delta;
         return newQty > 0 ? { ...item, qty: newQty } : item;
@@ -383,8 +455,13 @@ export default function BranchPOS() {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const totalDiscount = cart.reduce((sum, item) => sum + item.discount, 0);
-  const total = subtotal - totalDiscount;
+  const currentVoucherContextKey = branchId && selectedCustomer ? `${branchId}:${selectedCustomer.id}` : '';
+  const selectedVoucher = voucherContextKey === currentVoucherContextKey
+    ? customerVouchers.find((voucher) => voucher.id === selectedVoucherID)
+    : undefined;
+  const voucherDiscount = calculateVoucherDiscount(subtotal, selectedVoucher);
+  const totalDiscount = cart.reduce((sum, item) => sum + item.discount, 0) + voucherDiscount;
+  const total = Math.max(0, subtotal - totalDiscount);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#f5f5f5] text-slate-800">
@@ -543,10 +620,29 @@ export default function BranchPOS() {
             <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{itemCount} items</span>
           </div>
           {selectedCustomer && (
-            <div className="flex items-center justify-between border-b border-slate-200 bg-green-50 px-3 py-2 text-sm">
-              <span className="truncate font-medium text-green-900">{selectedCustomer.name}</span>
-              <button type="button" onClick={() => setSelectedCustomer(null)} className="ml-2 text-xs font-semibold text-green-800 hover:underline">Remove</button>
-            </div>
+            <>
+              <div className="flex items-center justify-between border-b border-slate-200 bg-green-50 px-3 py-2 text-sm">
+                <span className="truncate font-medium text-green-900">{selectedCustomer.name}</span>
+                <button type="button" onClick={() => { setSelectedCustomer(null); setSelectedVoucherID(''); }} className="ml-2 text-xs font-semibold text-green-800 hover:underline">Remove</button>
+              </div>
+              <div className="border-b border-slate-200 bg-amber-50/70 px-3 py-3">
+                <label className="block text-xs font-semibold text-slate-700" htmlFor="customer-loyalty-voucher">Voucher pelanggan</label>
+                {vouchersLoading || voucherContextKey !== `${branchId}:${selectedCustomer.id}` ? <p className="mt-1 text-xs text-slate-500">Memuat voucher...</p> : customerVouchers.length > 0 ? (
+                  <select id="customer-loyalty-voucher" value={selectedVoucherID} onChange={(event) => setSelectedVoucherID(event.target.value)} className="mt-1 w-full border border-slate-300 bg-white px-2.5 py-2 text-sm text-slate-800 outline-none focus:border-[#21AC3A]">
+                    <option value="">Tanpa voucher</option>
+                    {customerVouchers.map((voucher) => {
+                      const voucherValue = voucher.discount_type === 'percentage'
+                        ? `${voucher.discount_percentage}%${voucher.max_discount_amount_idr != null ? ` maks. ${formatIDR(voucher.max_discount_amount_idr)}` : ''}`
+                        : formatIDR(voucher.discount_amount_idr);
+                      return <option key={voucher.id} value={voucher.id}>{voucher.reward_name} · {voucherValue}</option>;
+                    })}
+                  </select>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">{voucherError || 'Pelanggan ini belum memiliki voucher yang bisa digunakan.'}</p>
+                )}
+                {selectedVoucher && <p className="mt-1 text-xs font-medium text-amber-800">Diskon voucher: {formatIDR(voucherDiscount)}</p>}
+              </div>
+            </>
           )}
           <div className="relative border-b border-slate-300 p-3">
             <div className="flex gap-2">
@@ -630,7 +726,7 @@ export default function BranchPOS() {
             </button>
             <button
               type="button"
-              onClick={() => { setCart([]); setSelectedCustomer(null); setAmountPaid(''); }}
+              onClick={() => { setCart([]); setSelectedCustomer(null); setSelectedVoucherID(''); setAmountPaid(''); }}
               disabled={cart.length === 0}
               className="w-full border border-slate-300 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -718,12 +814,12 @@ export default function BranchPOS() {
               </form>
             )}
             {!isCreatingCustomer && <div className="overflow-y-auto">
-              <button type="button" onClick={() => { setSelectedCustomer(null); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
+              <button type="button" onClick={() => { setSelectedCustomer(null); setSelectedVoucherID(''); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
                 <span><span className="block text-sm font-semibold text-slate-800">Continue without a customer</span><span className="text-xs text-slate-500">Customer selection is optional</span></span>
                 {!selectedCustomer && <Check className="h-4 w-4 text-[#21AC3A]" />}
               </button>
               {customersLoading ? <p className="px-5 py-8 text-center text-sm text-slate-500">Loading customers…</p> : customers.map((customer) => (
-                <button type="button" key={customer.id} onClick={() => { setSelectedCustomer(customer); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
+                <button type="button" key={customer.id} onClick={() => { setSelectedCustomer(customer); setSelectedVoucherID(''); setIsCustomerModalOpen(false); }} className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left hover:bg-slate-50">
                   <span><span className="block text-sm font-semibold text-slate-900">{customer.name}</span><span className="text-xs text-slate-500">{customer.phone || customer.email || 'No contact details'}</span></span>
                   {selectedCustomer?.id === customer.id && <Check className="h-4 w-4 text-[#21AC3A]" />}
                 </button>
@@ -962,6 +1058,7 @@ Verifikasi pembayaran telah diterima sebelum konfirmasi. Transaksi akan langsung
                     const orderPayload = {
                       payment_method: paymentMethod,
                       ...(selectedCustomer ? { customer_id: selectedCustomer.id } : {}),
+                      ...(selectedVoucher ? { voucher_id: selectedVoucher.id } : {}),
                       items: cart.map(item => ({
                         product_id: item.id,
                         qty: item.qty
@@ -982,7 +1079,11 @@ Verifikasi pembayaran telah diterima sebelum konfirmasi. Transaksi akan langsung
                       throw new Error(errData.error || 'Failed to create order');
                     }
 
-                    toast.success('Pembayaran Berhasil! Stok telah diperbarui.');
+                    const orderResult = await orderRes.json().catch(() => ({}));
+                    const pointsEarned = Number(orderResult.loyalty_points_earned || 0);
+                    toast.success(pointsEarned > 0
+                      ? `Pembayaran berhasil! Pelanggan mendapat ${pointsEarned.toLocaleString('id-ID')} poin.`
+                      : 'Pembayaran berhasil! Stok telah diperbarui.');
 
                     // Refresh products to get latest stock
                     const res = await fetch(`/api/branches/${branchId}/products`, {
@@ -1004,6 +1105,7 @@ Verifikasi pembayaran telah diterima sebelum konfirmasi. Transaksi akan langsung
 
                     setCart([]);
                     setSelectedCustomer(null);
+                    setSelectedVoucherID('');
                     setIsPaymentModalOpen(false);
                     setAmountPaid('');
                     void fetchOrders();
@@ -1012,7 +1114,7 @@ Verifikasi pembayaran telah diterima sebelum konfirmasi. Transaksi akan langsung
                     toast.error(err instanceof Error ? err.message : 'Terjadi kesalahan saat memproses pembayaran');
                   }
                 }}
-                disabled={paymentMethod === 'cash' && (typeof amountPaid !== 'number' || amountPaid < total)}
+                disabled={(paymentMethod === 'cash' && (typeof amountPaid !== 'number' || amountPaid < total)) || Boolean(selectedVoucherID && !selectedVoucher)}
                 className="flex-1 bg-[#21AC3A] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {paymentMethod === 'cash' ? 'Selesaikan pembayaran' : `Konfirmasi ${paymentMethods.find((method) => method.value === paymentMethod)?.label ?? 'pembayaran'}`}
