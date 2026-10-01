@@ -57,12 +57,17 @@ func TestListToolsExposesTenantAgnosticSchemas(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"get_sales_summary":           true,
-		"get_top_products":            true,
-		"get_low_stock_products":      true,
-		"find_product_stock":          true,
-		"get_customer_overview":       true,
-		"get_restock_recommendations": true,
+		"get_sales_summary":            true,
+		"get_top_products":             true,
+		"get_low_stock_products":       true,
+		"find_product_stock":           true,
+		"get_customer_overview":        true,
+		"get_restock_recommendations":  true,
+		"get_sales_trend":              true,
+		"get_payment_method_breakdown": true,
+		"get_inventory_valuation":      true,
+		"get_employee_overview":        true,
+		"get_attendance_report":        true,
 	}
 	if len(result.Tools) != len(want) {
 		t.Fatalf("got %d tools, want %d", len(result.Tools), len(want))
