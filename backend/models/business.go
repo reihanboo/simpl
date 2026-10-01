@@ -8,13 +8,14 @@ import (
 )
 
 type Business struct {
-	ID        uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	OwnerID   uuid.UUID      `gorm:"type:uuid;not null" json:"owner_id"`
-	Name      string         `gorm:"type:varchar(255);not null" json:"name"`
-	Address   string         `gorm:"type:text" json:"address"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                    uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	OwnerID               uuid.UUID      `gorm:"type:uuid;not null" json:"owner_id"`
+	Name                  string         `gorm:"type:varchar(255);not null" json:"name"`
+	Address               string         `gorm:"type:text" json:"address"`
+	LoyaltyRupiahPerPoint int64          `gorm:"not null;default:1000" json:"loyalty_rupiah_per_point"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 type Subscription struct {

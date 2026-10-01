@@ -12,6 +12,7 @@ type Order struct {
 	BranchID          uuid.UUID   `gorm:"type:uuid;not null;index" json:"branch_id"`
 	CashierID         uuid.UUID   `gorm:"type:uuid;not null" json:"cashier_id"`
 	CustomerID        *uuid.UUID  `gorm:"type:uuid;index" json:"customer_id,omitempty"`
+	LoyaltyVoucherID  *uuid.UUID  `gorm:"type:uuid;index" json:"loyalty_voucher_id,omitempty"`
 	OrderNumber       string      `gorm:"type:varchar(100);not null" json:"order_number"`
 	TotalAmountIDR    int64       `gorm:"column:total_amount_idr;not null;default:0" json:"total_amount_idr"`
 	DiscountAmountIDR int64       `gorm:"column:discount_amount_idr;not null;default:0" json:"discount_amount_idr"`
