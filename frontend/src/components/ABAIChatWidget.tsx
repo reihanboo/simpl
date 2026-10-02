@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import {
+  AnimatePresence,
+  animate as animateMotionValue,
+  motion,
+  useMotionValue,
+} from 'framer-motion';
 import { ArrowRight, ChevronUp, Minus, Send, Sparkles } from 'lucide-react';
 import { Markdown } from './Markdown';
 
@@ -16,7 +21,50 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatSending, setIsChatSending] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [launcherPosition, setLauncherPosition] = useState({ x: 0, y: 0 });
+  const launcherX = useMotionValue(0);
+  const launcherY = useMotionValue(0);
+  const [dragConstraints, setDragConstraints] = useState({
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  });
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateMobileDragBounds = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const mobile = window.matchMedia('(max-width: 767px)').matches;
+      setViewportSize({ width, height });
+      setIsMobileViewport(mobile);
+
+      if (!mobile) {
+        launcherX.set(0);
+        launcherY.set(0);
+        setLauncherPosition({ x: 0, y: 0 });
+        return;
+      }
+
+      const maxX = Math.max(0, window.innerWidth - 72);
+      const maxY = Math.max(0, window.innerHeight - 132);
+      setDragConstraints({ left: -maxX, right: 0, top: -maxY, bottom: 0 });
+      const position = {
+        x: Math.max(-maxX, Math.min(0, launcherX.get())),
+        y: Math.max(-maxY, Math.min(0, launcherY.get())),
+      };
+      launcherX.set(position.x);
+      launcherY.set(position.y);
+      setLauncherPosition(position);
+    };
+
+    updateMobileDragBounds();
+    window.addEventListener('resize', updateMobileDragBounds);
+    return () => window.removeEventListener('resize', updateMobileDragBounds);
+  }, [launcherX, launcherY]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -68,18 +116,38 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
     void sendChatMessage();
   };
 
+  const chatPanelWidth = Math.min(368, Math.max(0, viewportSize.width - 16));
+  const chatPanelX = isMobileViewport && launcherPosition.x < 0
+    ? -(viewportSize.width - chatPanelWidth - 16)
+    : 0;
+  const chatPanelHeight = Math.min(608, Math.max(0, viewportSize.height - 114));
+  const chatPanelTop = viewportSize.height - 102 - chatPanelHeight;
+  const chatPanelY = isMobileViewport
+    ? Math.max(launcherPosition.y, 8 - chatPanelTop)
+    : 0;
+
   return (
     <div className="pointer-events-none fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-2 z-70 flex flex-col items-end md:bottom-0 md:right-5">
       <AnimatePresence mode="wait" initial={false}>
         {isOpen ? (
           <motion.section
             key="abai-chat-panel"
-            initial={{ opacity: 0, y: 64, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.98 }}
+            initial={{
+              opacity: 0,
+              x: chatPanelX,
+              y: chatPanelY + 64,
+              scale: 0.98,
+            }}
+            animate={{ opacity: 1, x: chatPanelX, y: chatPanelY, scale: 1 }}
+            exit={{
+              opacity: 0,
+              x: chatPanelX,
+              y: chatPanelY + 24,
+              scale: 0.98,
+            }}
             transition={{ type: 'tween', duration: 0.28, ease: 'easeOut' }}
             aria-label="Chat ABAI"
-            className="pointer-events-auto flex h-[min(38rem,calc(100dvh-5rem-env(safe-area-inset-bottom)))] w-[min(23rem,calc(100vw-1rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl md:h-[min(38rem,calc(100dvh-0.75rem))] md:rounded-none"
+            className={`pointer-events-auto flex h-[min(38rem,calc(100dvh-5rem-env(safe-area-inset-bottom)))] w-[min(23rem,calc(100vw-1rem))] ${isMobileViewport && launcherPosition.x < 0 ? 'origin-bottom-left' : 'origin-bottom-right'} flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl md:h-[min(38rem,calc(100dvh-0.75rem))] md:origin-bottom-right md:rounded-none`}
           >
             <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3.5">
               <div className="flex min-w-0 items-center gap-3">
@@ -186,13 +254,47 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
           <motion.button
             key="abai-chat-tab"
             type="button"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ x: launcherX, y: launcherY }}
+            drag={isMobileViewport}
+            dragConstraints={dragConstraints}
+            dragMomentum={false}
+            dragElastic={0.05}
+            onDragEnd={() => {
+              const draggedX = Math.max(
+                dragConstraints.left,
+                Math.min(dragConstraints.right, launcherX.get()),
+              );
+              const edge = (dragConstraints.left + dragConstraints.right) / 2;
+              const position = {
+                x: draggedX < edge
+                  ? dragConstraints.left
+                  : dragConstraints.right,
+                y: Math.max(
+                  dragConstraints.top,
+                  Math.min(dragConstraints.bottom, launcherY.get()),
+                ),
+              };
+
+              setLauncherPosition(position);
+              animateMotionValue(launcherX, position.x, {
+                type: 'spring',
+                stiffness: 500,
+                damping: 40,
+              });
+              animateMotionValue(launcherY, position.y, {
+                type: 'spring',
+                stiffness: 500,
+                damping: 40,
+              });
+            }}
             onClick={() => setIsOpen(true)}
             aria-label="Buka chat ABAI"
             aria-expanded={false}
-            className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border border-t-2 border-slate-300 border-t-[#21AC3A] bg-white text-left shadow-[0_3px_14px_rgba(15,23,42,0.18)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#21AC3A] md:w-[min(18rem,calc(100vw-1rem))] md:justify-start md:rounded-none md:border-b-0 md:px-3 md:shadow-[0_-3px_14px_rgba(15,23,42,0.12)]"
+            title={isMobileViewport ? 'Geser untuk memindahkan ABAI' : undefined}
+            className="pointer-events-auto flex h-14 w-14 touch-none items-center justify-center rounded-full border border-t-2 border-slate-300 border-t-[#21AC3A] bg-white text-left shadow-[0_3px_14px_rgba(15,23,42,0.18)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#21AC3A] md:w-[min(18rem,calc(100vw-1rem))] md:touch-auto md:items-center md:justify-start md:gap-3 md:rounded-none md:border-b-0 md:px-3 md:shadow-[0_-3px_14px_rgba(15,23,42,0.12)]"
           >
             <span className="relative flex h-9 w-9 shrink-0 items-center justify-center bg-[#21AC3A] text-white">
               <Sparkles className="h-4 w-4" />
