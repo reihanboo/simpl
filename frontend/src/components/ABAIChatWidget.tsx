@@ -69,7 +69,7 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
   };
 
   return (
-    <div className="pointer-events-none fixed bottom-0 right-2 z-70 flex flex-col items-end sm:right-5">
+    <div className="pointer-events-none fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom))] right-2 z-70 flex flex-col items-end md:bottom-0 md:right-5">
       <AnimatePresence mode="wait" initial={false}>
         {isOpen ? (
           <motion.section
@@ -79,7 +79,7 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
             exit={{ opacity: 0, y: 24, scale: 0.98 }}
             transition={{ type: 'tween', duration: 0.28, ease: 'easeOut' }}
             aria-label="Chat ABAI"
-            className="pointer-events-auto flex h-[min(38rem,calc(100dvh-0.75rem))] w-[min(23rem,calc(100vw-1rem))] origin-bottom-right flex-col overflow-hidden border border-slate-300 bg-white shadow-2xl"
+            className="pointer-events-auto flex h-[min(38rem,calc(100dvh-5rem-env(safe-area-inset-bottom)))] w-[min(23rem,calc(100vw-1rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-2xl md:h-[min(38rem,calc(100dvh-0.75rem))] md:rounded-none"
           >
             <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3.5">
               <div className="flex min-w-0 items-center gap-3">
@@ -192,17 +192,17 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
             onClick={() => setIsOpen(true)}
             aria-label="Buka chat ABAI"
             aria-expanded={false}
-            className="pointer-events-auto flex h-14 w-[min(18rem,calc(100vw-1rem))] items-center gap-3 border border-b-0 border-slate-300 border-t-2 border-t-[#21AC3A] bg-white px-3 text-left shadow-[0_-3px_14px_rgba(15,23,42,0.12)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#21AC3A]"
+            className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border border-t-2 border-slate-300 border-t-[#21AC3A] bg-white text-left shadow-[0_3px_14px_rgba(15,23,42,0.18)] transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#21AC3A] md:w-[min(18rem,calc(100vw-1rem))] md:justify-start md:rounded-none md:border-b-0 md:px-3 md:shadow-[0_-3px_14px_rgba(15,23,42,0.12)]"
           >
             <span className="relative flex h-9 w-9 shrink-0 items-center justify-center bg-[#21AC3A] text-white">
               <Sparkles className="h-4 w-4" />
               <span className="absolute -bottom-1 -right-1 h-3 w-3 border-2 border-white bg-emerald-500" />
             </span>
-            <span className="min-w-0 flex-1">
+            <span className="hidden min-w-0 flex-1 md:block">
               <span className="block truncate text-sm font-semibold text-slate-900">ABAI assistant</span>
               <span className="block text-[11px] text-slate-500">Asisten operasional · Aktif</span>
             </span>
-            <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" />
+            <ChevronUp className="hidden h-4 w-4 shrink-0 text-slate-500 md:block" />
           </motion.button>
         )}
       </AnimatePresence>
