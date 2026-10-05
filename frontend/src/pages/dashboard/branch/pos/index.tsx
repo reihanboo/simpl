@@ -1169,6 +1169,8 @@ Verifikasi pembayaran telah diterima sebelum konfirmasi. Transaksi akan langsung
 // Separate component for the scanner so it only mounts/unmounts when needed
 function ScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (text: string) => void }) {
   const onScanRef = useRef(onScan);
+  const [cameraFacing, setCameraFacing] = useState<'environment' | 'user'>('environment');
+  const [scannerError, setScannerError] = useState('');
 
   // Keep the ref updated with the latest onScan closure so we don't need to change the function reference passed to Scanner
   useEffect(() => {
@@ -1195,21 +1197,44 @@ function ScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (text:
             <ScanLine className="w-5 h-5 text-[#21AC3A]" />
             Scan Barcode
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCameraFacing((facing) => facing === 'environment' ? 'user' : 'environment');
+                setScannerError('');
+              }}
+              aria-label={`Ganti ke kamera ${cameraFacing === 'environment' ? 'depan' : 'belakang'}`}
+              title={`Ganti ke kamera ${cameraFacing === 'environment' ? 'depan' : 'belakang'}`}
+              className="inline-flex items-center gap-1.5 border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Kamera {cameraFacing === 'environment' ? 'depan' : 'belakang'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Tutup scanner"
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <div className="p-0 bg-black relative">
           <Scanner
             onScan={handleScan}
+            constraints={{ facingMode: { ideal: cameraFacing } }}
             formats={['qr_code', 'code_128', 'ean_13', 'ean_8']}
             allowMultiple={true}
             scanDelay={2000}
-            onError={(error) => console.log(error?.message)}
+            onError={(error) => setScannerError(error.message)}
           />
+          {scannerError && (
+            <p role="alert" className="bg-red-50 px-3 py-2 text-xs text-red-700">
+              Kamera tidak dapat digunakan: {scannerError}
+            </p>
+          )}
         </div>
       </motion.div>
     </div>
