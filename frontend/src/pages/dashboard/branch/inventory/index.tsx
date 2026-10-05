@@ -22,9 +22,9 @@ import {
   Boxes,
   Timer,
   ScanLine,
+  RefreshCw,
 } from "lucide-react";
 import { useParams } from "react-router-dom";
-import { div } from "framer-motion/m";
 
 interface InventoryProduct {
   id: string;
@@ -177,6 +177,9 @@ export default function BranchInventory() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSkuScannerOpen, setIsSkuScannerOpen] = useState(false);
   const [skuScannerError, setSkuScannerError] = useState("");
+  const [skuCameraFacing, setSkuCameraFacing] = useState<"environment" | "user">(
+    "environment",
+  );
   const [formData, setFormData] = useState({
     name: "",
     sku: "",
@@ -189,6 +192,7 @@ export default function BranchInventory() {
   const openAddProductModal = () => {
     setProductToEdit(null);
     setIsSkuScannerOpen(false);
+    setSkuCameraFacing("environment");
     setFormData({
       name: "",
       sku: "",
@@ -1312,7 +1316,9 @@ export default function BranchInventory() {
                             );
                           }}
                           onError={(error) => setSkuScannerError(error.message)}
-                          constraints={{ facingMode: { ideal: "environment" } }}
+                          constraints={{
+                            facingMode: { ideal: skuCameraFacing },
+                          }}
                           formats={[
                             "code_128",
                             "code_39",
@@ -1334,7 +1340,7 @@ export default function BranchInventory() {
                             },
                           }}
                         />
-                        {skuScannerError ? (
+                        {skuScannerError && (
                           <p
                             role="alert"
                             className="bg-red-50 px-3 py-2 text-xs text-red-700"
@@ -1343,9 +1349,26 @@ export default function BranchInventory() {
                             Pastikan izin kamera aktif dan halaman dibuka
                             melalui HTTPS atau localhost.
                           </p>
-                        ) : (
-                          <div></div>
                         )}
+                        <div className="flex items-center justify-between gap-3 bg-slate-50 px-3 py-2">
+                          <p className="text-xs text-slate-500">
+                            Arahkan kamera {skuCameraFacing === "environment" ? "belakang" : "depan"} ke barcode produk.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSkuCameraFacing((current) =>
+                                current === "environment" ? "user" : "environment",
+                              );
+                              setSkuScannerError("");
+                            }}
+                            aria-label={`Ganti ke kamera ${skuCameraFacing === "environment" ? "depan" : "belakang"}`}
+                            className="inline-flex shrink-0 items-center gap-1.5 border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Kamera {skuCameraFacing === "environment" ? "depan" : "belakang"}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
