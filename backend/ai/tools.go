@@ -259,7 +259,7 @@ type productSales struct {
 	Name       string `json:"name"`
 	SKU        string `json:"sku"`
 	QtySold    int    `json:"qty_sold"`
-	RevenueIDR int64  `json:"revenue_idr"`
+	RevenueIDR int64  `gorm:"column:revenue_idr" json:"revenue_idr"`
 }
 
 type topProductsOutput struct {
@@ -362,7 +362,7 @@ type productStockArgs struct {
 type productStockItem struct {
 	Name              string `json:"name"`
 	SKU               string `json:"sku"`
-	SellingPriceIDR   int64  `json:"selling_price_idr"`
+	SellingPriceIDR   int64  `gorm:"column:selling_price_idr" json:"selling_price_idr"`
 	CurrentStock      int    `json:"current_stock"`
 	LowStockThreshold int    `json:"low_stock_threshold"`
 }

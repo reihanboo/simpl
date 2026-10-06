@@ -14,9 +14,9 @@ type salesTrendArgs struct {
 
 type dailySalesTrend struct {
 	Date        string `json:"date"`
-	RevenueIDR  int64  `json:"revenue_idr"`
+	RevenueIDR  int64  `gorm:"column:revenue_idr" json:"revenue_idr"`
 	Orders      int    `json:"orders"`
-	DiscountIDR int64  `json:"discount_idr"`
+	DiscountIDR int64  `gorm:"column:discount_idr" json:"discount_idr"`
 	ItemsSold   int    `json:"items_sold"`
 }
 
@@ -91,8 +91,8 @@ type paymentBreakdownArgs struct {
 type paymentMethodRow struct {
 	Method      string `json:"method"`
 	Orders      int    `json:"orders"`
-	RevenueIDR  int64  `json:"revenue_idr"`
-	DiscountIDR int64  `json:"discount_idr"`
+	RevenueIDR  int64  `gorm:"column:revenue_idr" json:"revenue_idr"`
+	DiscountIDR int64  `gorm:"column:discount_idr" json:"discount_idr"`
 }
 
 type paymentMethodItem struct {
