@@ -114,7 +114,7 @@ func NewServer(scope Scope) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_customer_overview",
-		Description: "Jumlah pelanggan terdaftar, pelanggan baru dalam periode tertentu, dan pelanggan dengan belanja terbesar.",
+		Description: "Jumlah pelanggan terdaftar, pelanggan baru dalam periode tertentu, dan 5 pelanggan dengan belanja seumur hidup terbesar. Total belanja dan pesanan hanya menghitung transaksi lunas, sama seperti halaman pelanggan; periode hanya berlaku untuk pelanggan baru.",
 		Annotations: readOnly("Ringkasan pelanggan"),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in customerOverviewArgs) (*mcp.CallToolResult, customerOverviewOutput, error) {
 		out, err := scope.customerOverview(in)
@@ -406,8 +406,8 @@ type customerOverviewArgs struct {
 
 type customerSpend struct {
 	Name          string `json:"name"`
-	TotalSpendIDR int64  `json:"total_spend_idr"`
-	Orders        int    `json:"orders"`
+	TotalSpendIDR int64  `gorm:"column:total_spend_idr" json:"total_spend_idr"`
+	Orders        int    `gorm:"column:orders" json:"orders"`
 }
 
 type customerOverviewOutput struct {
@@ -442,7 +442,9 @@ func (s Scope) customerOverview(in customerOverviewArgs) (customerOverviewOutput
 		       COALESCE(SUM(o.total_amount_idr), 0)::bigint AS total_spend_idr,
 		       COUNT(o.id)::int AS orders
 		FROM customers c
-		LEFT JOIN orders o ON o.customer_id = c.id AND o.payment_status <> 'refunded'
+		LEFT JOIN orders o ON o.customer_id = c.id
+		  AND o.business_id = c.business_id
+		  AND LOWER(o.payment_status) = 'paid'
 		WHERE c.business_id = ? AND c.deleted_at IS NULL
 		GROUP BY c.id, c.name
 		ORDER BY total_spend_idr DESC
