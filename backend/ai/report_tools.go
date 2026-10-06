@@ -3,6 +3,7 @@ package ai
 import (
 	"time"
 
+	"backend/config"
 	"backend/models"
 
 	"github.com/google/uuid"
@@ -14,9 +15,9 @@ type salesTrendArgs struct {
 
 type dailySalesTrend struct {
 	Date        string `json:"date"`
-	RevenueIDR  int64  `json:"revenue_idr"`
+	RevenueIDR  int64  `gorm:"column:revenue_idr" json:"revenue_idr"`
 	Orders      int    `json:"orders"`
-	DiscountIDR int64  `json:"discount_idr"`
+	DiscountIDR int64  `gorm:"column:discount_idr" json:"discount_idr"`
 	ItemsSold   int    `json:"items_sold"`
 }
 
@@ -91,8 +92,8 @@ type paymentBreakdownArgs struct {
 type paymentMethodRow struct {
 	Method      string `json:"method"`
 	Orders      int    `json:"orders"`
-	RevenueIDR  int64  `json:"revenue_idr"`
-	DiscountIDR int64  `json:"discount_idr"`
+	RevenueIDR  int64  `gorm:"column:revenue_idr" json:"revenue_idr"`
+	DiscountIDR int64  `gorm:"column:discount_idr" json:"discount_idr"`
 }
 
 type paymentMethodItem struct {
@@ -160,7 +161,16 @@ type inventoryValuationOutput struct {
 
 func (s Scope) inventoryValuation() (inventoryValuationOutput, error) {
 	var inventories []models.BranchInventory
-	if err := aiDB().Preload("Product").Where("branch_id = ?", s.BranchID).Find(&inventories).Error; err != nil {
+	err := aiDB().Preload("Product").Where("branch_id = ?", s.BranchID).Find(&inventories).Error
+	if (err != nil || !hasValuationProducts(inventories)) && config.AIDB != nil && config.AIDB != config.DB {
+		var primaryInventories []models.BranchInventory
+		primaryErr := config.DB.Preload("Product").Where("branch_id = ?", s.BranchID).Find(&primaryInventories).Error
+		if primaryErr == nil && hasValuationProducts(primaryInventories) {
+			inventories = primaryInventories
+			err = nil
+		}
+	}
+	if err != nil {
 		return inventoryValuationOutput{}, err
 	}
 
@@ -184,6 +194,15 @@ func (s Scope) inventoryValuation() (inventoryValuationOutput, error) {
 	}
 	out.PotentialGrossProfitIDR = out.PotentialSalesValueIDR - out.InventoryCostValueIDR
 	return out, nil
+}
+
+func hasValuationProducts(inventories []models.BranchInventory) bool {
+	for _, inventory := range inventories {
+		if inventory.Product.ID != uuid.Nil {
+			return true
+		}
+	}
+	return false
 }
 
 type employeeOverviewGroup struct {

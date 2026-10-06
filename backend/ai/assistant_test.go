@@ -4,10 +4,45 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"gorm.io/gorm/schema"
 )
+
+func TestRawQueryMoneyFieldsMatchSQLAliases(t *testing.T) {
+	tests := []struct {
+		name   string
+		model  any
+		field  string
+		column string
+	}{
+		{name: "customer lifetime spend", model: customerSpend{}, field: "TotalSpendIDR", column: "total_spend_idr"},
+		{name: "product revenue", model: productSales{}, field: "RevenueIDR", column: "revenue_idr"},
+		{name: "product selling price", model: productStockItem{}, field: "SellingPriceIDR", column: "selling_price_idr"},
+		{name: "daily revenue", model: dailySalesTrend{}, field: "RevenueIDR", column: "revenue_idr"},
+		{name: "daily discount", model: dailySalesTrend{}, field: "DiscountIDR", column: "discount_idr"},
+		{name: "payment method revenue", model: paymentMethodRow{}, field: "RevenueIDR", column: "revenue_idr"},
+		{name: "payment method discount", model: paymentMethodRow{}, field: "DiscountIDR", column: "discount_idr"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := schema.Parse(test.model, &sync.Map{}, schema.NamingStrategy{})
+			if err != nil {
+				t.Fatalf("parse model schema: %v", err)
+			}
+			field := parsed.LookUpField(test.field)
+			if field == nil {
+				t.Fatalf("field %q not found", test.field)
+			}
+			if field.DBName != test.column {
+				t.Errorf("database column = %q, want %q", field.DBName, test.column)
+			}
+		})
+	}
+}
 
 func TestClampArg(t *testing.T) {
 	tests := []struct {
