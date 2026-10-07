@@ -18,7 +18,12 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const demoPassword = "SIMPLdemo123!"
+						const (
+	demoPassword             = "SIMPLdemo123!"
+	demoEnterpriseOrderCount = 540
+	demoUMKMOrderCount       = 270
+	demoSalesHistoryDays     = 90
+)
 
 func main() {
 	_ = godotenv.Load("../.env", ".env")
@@ -131,10 +136,10 @@ func seed(db *gorm.DB) error {
 		if err != nil {
 			return err
 		}
-		if err := seedOrdersAndInventory(upsert, newID, now, ownerID, ids["user:cashier"], enterprise.ID, []models.Branch{branchA, branchB}, products[enterprise.ID], customers); err != nil {
+		if err := seedOrdersAndInventory(upsert, newID, now, ownerID, ids["user:cashier"], enterprise.ID, []models.Branch{branchA, branchB}, products[enterprise.ID], customers, demoEnterpriseOrderCount); err != nil {
 			return err
 		}
-		if err := seedOrdersAndInventory(upsert, newID, now, ownerID, ownerID, umkm.ID, []models.Branch{branchUMKM}, products[umkm.ID], nil); err != nil {
+		if err := seedOrdersAndInventory(upsert, newID, now, ownerID, ownerID, umkm.ID, []models.Branch{branchUMKM}, products[umkm.ID], nil, demoUMKMOrderCount); err != nil {
 			return err
 		}
 		if err := seedAttendance(upsert, newID, now, enterprise.ID, branchA.ID, employees[:3]); err != nil {
@@ -198,10 +203,10 @@ func seedCustomers(upsert func(any) error, newID func(string) uuid.UUID, busines
 	return customers, nil
 }
 
-func seedOrdersAndInventory(upsert func(any) error, newID func(string) uuid.UUID, now time.Time, ownerID, cashierID, businessID uuid.UUID, branches []models.Branch, products []models.Product, customers []models.Customer) error {
+func seedOrdersAndInventory(upsert func(any) error, newID func(string) uuid.UUID, now time.Time, ownerID, cashierID, businessID uuid.UUID, branches []models.Branch, products []models.Product, customers []models.Customer, orderCount int) error {
 	methods := []string{"cash", "qris", "debit", "ewallet", "transfer"}
 	soldByBranchProduct := map[string]int{}
-	for i := 0; i < 48; i++ {
+	for i := 0; i < orderCount; i++ {
 		branch := branches[i%len(branches)]
 		customerID := (*uuid.UUID)(nil)
 		if len(customers) > 0 {
@@ -209,7 +214,7 @@ func seedOrdersAndInventory(upsert func(any) error, newID func(string) uuid.UUID
 			id := customers[customerIndex].ID
 			customerID = &id
 		}
-		created := jakartaTime(now, 47-i, 9+(i%9))
+		created := demoOrderTime(now, i, orderCount)
 		order := models.Order{ID: newID(fmt.Sprintf("order:%s:%03d", businessID, i+1)), BusinessID: businessID, BranchID: branch.ID, CashierID: cashierID, CustomerID: customerID, OrderNumber: fmt.Sprintf("DEMO-%s-%03d", shortPlanKey(branches), i+1), TotalAmountIDR: 0, PaymentMethod: methods[i%len(methods)], PaymentStatus: "paid", CreatedAt: created}
 		orderTotal := int64(0)
 		itemCount := 1 + (i % 3)
@@ -245,11 +250,11 @@ func seedOrdersAndInventory(upsert func(any) error, newID func(string) uuid.UUID
 			if err := upsert(&inventory); err != nil {
 				return fmt.Errorf("upsert inventory for %s: %w", product.Name, err)
 			}
-			adjustment := models.StockMovement{ID: newID(fmt.Sprintf("movement:initial:%s:%s", branch.ID, product.ID)), BranchID: branch.ID, ProductID: product.ID, UserID: ownerID, QtyChange: initialStock, Reason: "adjustment", CreatedAt: now.AddDate(0, 0, -60)}
+			adjustment := models.StockMovement{ID: newID(fmt.Sprintf("movement:initial:%s:%s", branch.ID, product.ID)), BranchID: branch.ID, ProductID: product.ID, UserID: ownerID, QtyChange: initialStock, Reason: "adjustment", CreatedAt: jakartaTime(now, demoSalesHistoryDays+1, 8)}
 			if err := upsert(&adjustment); err != nil {
 				return fmt.Errorf("upsert opening stock movement: %w", err)
 			}
-			for orderIndex := 0; orderIndex < 48; orderIndex++ {
+			for orderIndex := 0; orderIndex < orderCount; orderIndex++ {
 				orderBranch := branches[orderIndex%len(branches)]
 				if orderBranch.ID != branch.ID {
 					continue
@@ -260,7 +265,7 @@ func seedOrdersAndInventory(upsert func(any) error, newID func(string) uuid.UUID
 						continue
 					}
 					qty := 1 + ((orderIndex + itemIndex) % 3)
-					movement := models.StockMovement{ID: newID(fmt.Sprintf("movement:sale:%s:%03d:%d", businessID, orderIndex+1, itemIndex+1)), BranchID: branch.ID, ProductID: product.ID, UserID: cashierID, QtyChange: -qty, Reason: "sale", CreatedAt: jakartaTime(now, 47-orderIndex, 9+(orderIndex%9))}
+					movement := models.StockMovement{ID: newID(fmt.Sprintf("movement:sale:%s:%03d:%d", businessID, orderIndex+1, itemIndex+1)), BranchID: branch.ID, ProductID: product.ID, UserID: cashierID, QtyChange: -qty, Reason: "sale", CreatedAt: demoOrderTime(now, orderIndex, orderCount)}
 					if err := upsert(&movement); err != nil {
 						return fmt.Errorf("upsert sale stock movement: %w", err)
 					}
@@ -329,6 +334,18 @@ func shortPlanKey(branches []models.Branch) string {
 		return "UMKM"
 	}
 	return "ENT"
+}
+
+func demoOrderTime(now time.Time, orderIndex, orderCount int) time.Time {
+	daysAgo := (orderCount - 1 - orderIndex) * demoSalesHistoryDays / orderCount
+	hour := 8 + (orderIndex*5)%14
+	minute := (orderIndex * 17) % 60
+	created := jakartaTime(now, daysAgo, hour).Add(time.Duration(minute) * time.Minute)
+	localNow := now.In(created.Location())
+	if created.After(localNow) {
+		return localNow.Add(-time.Duration(orderCount-orderIndex) * time.Minute)
+	}
+	return created
 }
 
 func jakartaTime(now time.Time, daysAgo, hour int) time.Time {
