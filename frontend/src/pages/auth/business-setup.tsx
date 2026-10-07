@@ -15,6 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Map, Marker } from 'pigeon-maps';
+import { loadMidtransSnap } from '../../utils/midtrans';
 
 type SetupStep = 'business' | 'plan';
 type Plan = 'UMKM' | 'Enterprise';
@@ -326,8 +327,9 @@ export default function BusinessSetupPage() {
         throw new Error(data.error || 'Bisnis belum dapat dibuat. Silakan coba lagi.');
       }
 
-      if (data.snap_token && window.snap) {
-        window.snap.pay(data.snap_token, {
+      if (data.snap_token) {
+        const snap = await loadMidtransSnap();
+        snap.pay(data.snap_token, {
           onSuccess: () => navigate('/dashboard', { replace: true }),
           onPending: () => navigate('/dashboard', { replace: true }),
           onError: () => navigate('/dashboard', { replace: true }),

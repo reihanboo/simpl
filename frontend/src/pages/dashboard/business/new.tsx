@@ -3,12 +3,8 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Store, Crown, Check, ArrowLeft, MapPin, Locate, Building2, CreditCard, Info, ShieldCheck } from 'lucide-react';
 import { Map, Marker } from 'pigeon-maps';
+import { loadMidtransSnap } from '../../../utils/midtrans';
 
-declare global {
-  interface Window {
-    snap: any;
-  }
-}
 
 export default function NewBusinessPage() {
   const navigate = useNavigate();
@@ -96,16 +92,17 @@ export default function NewBusinessPage() {
       }
 
       if (data.snap_token) {
-        window.snap.pay(data.snap_token, {
-          onSuccess: function (result: any) {
+        const snap = await loadMidtransSnap();
+        snap.pay(data.snap_token, {
+          onSuccess: function (result: unknown) {
             console.log('Payment success:', result);
             navigate('/dashboard');
           },
-          onPending: function (result: any) {
+          onPending: function (result: unknown) {
             console.log('Payment pending:', result);
             navigate('/dashboard');
           },
-          onError: function (result: any) {
+          onError: function (result: unknown) {
             console.error('Payment error:', result);
             alert('Pembayaran gagal atau terjadi kesalahan.');
           },

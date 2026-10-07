@@ -20,9 +20,8 @@ import {
   Activity
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import ExcelJS from 'exceljs';
+import type jsPDF from 'jspdf';
+import type ExcelJS from 'exceljs';
 
 // Types
 interface Order {
@@ -133,6 +132,7 @@ const downloadBlob = (blob: Blob, filename: string) => {
 };
 
 const downloadExcelReport = async (filename: string, sheetName: string, report: ExcelReport) => {
+  const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'SIMPL';
   workbook.created = new Date();
@@ -213,6 +213,14 @@ const downloadExcelReport = async (filename: string, sheetName: string, report: 
     new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     filename,
   );
+};
+
+const loadPdfExportTools = async () => {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  return { jsPDF, autoTable };
 };
 
 const pdfBrandHeader = (doc: jsPDF, title: string) => {
@@ -426,7 +434,8 @@ export default function BranchReports() {
   const paginatedMovements = filteredMovements.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   // PDF Export
-  const exportSalesPDF = () => {
+  const exportSalesPDF = async () => {
+    const { jsPDF, autoTable } = await loadPdfExportTools();
     const doc = new jsPDF();
     pdfBrandHeader(doc, 'Laporan Penjualan');
 
@@ -468,7 +477,8 @@ export default function BranchReports() {
     toast.success('Laporan Penjualan berhasil diunduh!');
   };
 
-  const exportInventoryPDF = () => {
+  const exportInventoryPDF = async () => {
+    const { jsPDF, autoTable } = await loadPdfExportTools();
     const doc = new jsPDF('landscape');
     pdfBrandHeader(doc, 'Laporan Inventori');
 
@@ -515,7 +525,8 @@ export default function BranchReports() {
     toast.success('Laporan Inventori berhasil diunduh!');
   };
 
-  const exportMovementPDF = () => {
+  const exportMovementPDF = async () => {
+    const { jsPDF, autoTable } = await loadPdfExportTools();
     const doc = new jsPDF();
     pdfBrandHeader(doc, 'Laporan Pergerakan Stok');
 
@@ -546,10 +557,15 @@ export default function BranchReports() {
     toast.success('Laporan Pergerakan Stok berhasil diunduh!');
   };
 
-  const handleExportPDF = () => {
-    if (activeTab === 'sales') exportSalesPDF();
-    else if (activeTab === 'inventory') exportInventoryPDF();
-    else exportMovementPDF();
+  const handleExportPDF = async () => {
+    try {
+      if (activeTab === 'sales') await exportSalesPDF();
+      else if (activeTab === 'inventory') await exportInventoryPDF();
+      else await exportMovementPDF();
+    } catch (error) {
+      console.error('Failed to export PDF report', error);
+      toast.error('Gagal mengunduh laporan PDF.');
+    }
   };
 
   const exportSalesExcel = async () => {

@@ -1,31 +1,32 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Routes, Route, Link } from 'react-router-dom';
 import { CheckCircle2, ChevronRight, ArrowRight, ArrowUpRight, LayoutDashboard, ShoppingCart, Zap, Shield, Crown, TrendingUp, Package, Users, BarChart3, Database, Check, X, Calculator, PiggyBank, Plus, Minus, Store } from 'lucide-react';
-import LoginPage from './pages/auth/login';
-import RegisterPage from './pages/auth/register';
-import ForgotPasswordPage from './pages/auth/forgot-password';
-import ResetPasswordPage from './pages/auth/reset-password';
-import ChangePasswordPage from './pages/auth/change-password';
-import ProfilePage from './pages/dashboard/profile';
-import DashboardLayout from './components/layout/DashboardLayout';
-import DashboardIndex from './pages/dashboard/index';
-import NewBusinessPage from './pages/dashboard/business/new';
 import { GuestRoute } from './components/GuestRoute';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import VerifyOtpPage from './pages/auth/verify-otp';
-import BusinessSetupPage from './pages/auth/business-setup';
-import BranchDashboard from './pages/dashboard/branch/index';
-import BranchLayout from './pages/dashboard/branch/layout';
-import BranchInventory from './pages/dashboard/branch/inventory/index';
-import BranchPOS from './pages/dashboard/branch/pos/index';
-import BranchReports from './pages/dashboard/branch/reports/index';
-import CustomersIndex from './pages/dashboard/branch/customers/index';
-import EmployeesIndex from './pages/dashboard/branch/employees/index';
-import AttendanceIndex from './pages/dashboard/branch/attendance';
-import BranchSettings from './pages/dashboard/branch/settings';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
+
+const LoginPage = lazy(() => import('./pages/auth/login'));
+const RegisterPage = lazy(() => import('./pages/auth/register'));
+const ForgotPasswordPage = lazy(() => import('./pages/auth/forgot-password'));
+const ResetPasswordPage = lazy(() => import('./pages/auth/reset-password'));
+const ChangePasswordPage = lazy(() => import('./pages/auth/change-password'));
+const VerifyOtpPage = lazy(() => import('./pages/auth/verify-otp'));
+const ProfilePage = lazy(() => import('./pages/dashboard/profile'));
+const DashboardLayout = lazy(() => import('./components/layout/DashboardLayout'));
+const DashboardIndex = lazy(() => import('./pages/dashboard/index'));
+const NewBusinessPage = lazy(() => import('./pages/dashboard/business/new'));
+const BusinessSetupPage = lazy(() => import('./pages/auth/business-setup'));
+const BranchDashboard = lazy(() => import('./pages/dashboard/branch/index'));
+const BranchLayout = lazy(() => import('./pages/dashboard/branch/layout'));
+const BranchInventory = lazy(() => import('./pages/dashboard/branch/inventory/index'));
+const BranchPOS = lazy(() => import('./pages/dashboard/branch/pos/index'));
+const BranchReports = lazy(() => import('./pages/dashboard/branch/reports/index'));
+const CustomersIndex = lazy(() => import('./pages/dashboard/branch/customers/index'));
+const EmployeesIndex = lazy(() => import('./pages/dashboard/branch/employees/index'));
+const AttendanceIndex = lazy(() => import('./pages/dashboard/branch/attendance'));
+const BranchSettings = lazy(() => import('./pages/dashboard/branch/settings'));
 
 function LandingPage() {
   const [calcPlan, setCalcPlan] = useState<'umkm' | 'enterprise'>('umkm');
@@ -621,35 +622,43 @@ export default function App() {
   return (
     <>
       <Toaster position="top-center" />
-      <Routes>
-      <Route element={<GuestRoute />}>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/auth/login" element={<LoginPage />} />
-        <Route path="/auth/register" element={<RegisterPage />} />
-        <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
-        <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-      </Route>
-      <Route element={<ProtectedRoute />}>
-        <Route path="/auth/change-password" element={<ChangePasswordPage />} />
-        <Route path="/onboarding" element={<BusinessSetupPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardIndex />} />
-          <Route path="business/new" element={<NewBusinessPage />} />
-          <Route path="branch/:id" element={<BranchLayout />}>
-            <Route index element={<BranchDashboard />} />
-            <Route path="inventory" element={<BranchInventory />} />
-            <Route path="pos" element={<BranchPOS />} />
-            <Route path="reports" element={<BranchReports />} />
-            <Route path="customers" element={<CustomersIndex />} />
-            <Route path="employees" element={<EmployeesIndex />} />
-            <Route path="attendance" element={<AttendanceIndex />} />
-            <Route path="settings" element={<BranchSettings />} />
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
+            Memuat...
+          </div>
+        }
+      >
+        <Routes>
+          <Route element={<GuestRoute />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/auth/login" element={<LoginPage />} />
+            <Route path="/auth/register" element={<RegisterPage />} />
+            <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
+            <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
           </Route>
-        </Route>
-      </Route>
-    </Routes>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/auth/change-password" element={<ChangePasswordPage />} />
+            <Route path="/onboarding" element={<BusinessSetupPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/dashboard" element={<DashboardLayout />}>
+              <Route index element={<DashboardIndex />} />
+              <Route path="business/new" element={<NewBusinessPage />} />
+              <Route path="branch/:id" element={<BranchLayout />}>
+                <Route index element={<BranchDashboard />} />
+                <Route path="inventory" element={<BranchInventory />} />
+                <Route path="pos" element={<BranchPOS />} />
+                <Route path="reports" element={<BranchReports />} />
+                <Route path="customers" element={<CustomersIndex />} />
+                <Route path="employees" element={<EmployeesIndex />} />
+                <Route path="attendance" element={<AttendanceIndex />} />
+                <Route path="settings" element={<BranchSettings />} />
+              </Route>
+            </Route>
+          </Route>
+        </Routes>
+      </Suspense>
     </>
   );
 }
