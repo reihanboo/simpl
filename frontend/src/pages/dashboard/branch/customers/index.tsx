@@ -1228,6 +1228,12 @@ type LoyaltyReward = {
 
 function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
+  const [rupiahPerPoint, setRupiahPerPoint] = useState('1000');
+  const [isBusinessOwner, setIsBusinessOwner] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  const [settingsNotice, setSettingsNotice] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1257,6 +1263,32 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
   const [customerSearch, setCustomerSearch] = useState('');
   const [targetSpecificCustomers, setTargetSpecificCustomers] = useState(false);
   const [targetCustomerIDs, setTargetCustomerIDs] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!branchId) return;
+    const controller = new AbortController();
+    const loadSettings = async () => {
+      setSettingsLoading(true);
+      setSettingsError('');
+      try {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(`/api/branches/${branchId}/loyalty-settings`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Gagal memuat pengaturan poin loyalitas.');
+        setRupiahPerPoint(String(payload.loyalty_rupiah_per_point || 1000));
+        setIsBusinessOwner(Boolean(payload.is_owner));
+      } catch (loadError) {
+        if (!controller.signal.aborted) setSettingsError(loadError instanceof Error ? loadError.message : 'Gagal memuat pengaturan poin loyalitas.');
+      } finally {
+        if (!controller.signal.aborted) setSettingsLoading(false);
+      }
+    };
+    void loadSettings();
+    return () => controller.abort();
+  }, [branchId]);
 
   useEffect(() => {
     if (!branchId) return;
@@ -1318,6 +1350,36 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
     void loadCustomers();
     return () => controller.abort();
   }, [branchId]);
+
+  const saveLoyaltySettings = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!branchId || !isBusinessOwner) return;
+    const amount = Number(rupiahPerPoint);
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 1_000_000_000) {
+      setSettingsError('Nilai harus antara Rp1 sampai Rp1.000.000.000.');
+      return;
+    }
+
+    setSettingsSaving(true);
+    setSettingsError('');
+    setSettingsNotice('');
+    try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(`/api/branches/${branchId}/loyalty-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ loyalty_rupiah_per_point: amount }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Gagal menyimpan pengaturan poin loyalitas.');
+      setRupiahPerPoint(String(payload.loyalty_rupiah_per_point));
+      setSettingsNotice('Aturan perolehan poin berhasil disimpan.');
+    } catch (saveError) {
+      setSettingsError(saveError instanceof Error ? saveError.message : 'Gagal menyimpan pengaturan poin loyalitas.');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   const resetForm = () => {
     setEditing(null);
@@ -1433,6 +1495,32 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
 
   return (
     <section className="space-y-5">
+      <section className="border border-amber-200 bg-amber-50/60 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700"><Coins className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-semibold text-slate-900">Poin otomatis dari transaksi</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Pelanggan anggota loyalitas mendapatkan 1 poin untuk setiap kelipatan nilai belanja yang ditetapkan. Poin masuk setelah transaksi berhasil dibayar.</p>
+            {settingsError && <p role="alert" className="mt-3 text-sm text-red-700">{settingsError}</p>}
+            {settingsNotice && <p role="status" className="mt-3 text-sm text-emerald-700">{settingsNotice}</p>}
+            {settingsLoading ? <p className="mt-3 text-sm text-slate-500">Memuat pengaturan poin...</p> : isBusinessOwner ? (
+              <form onSubmit={(event) => void saveLoyaltySettings(event)} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="block w-full max-w-sm space-y-1.5 text-sm font-medium text-slate-700">
+                  Nilai belanja per 1 poin
+                  <span className="flex min-h-10 items-center border border-slate-300 bg-white focus-within:border-[#21AC3A] focus-within:ring-2 focus-within:ring-[#21AC3A]/20">
+                    <span className="border-r border-slate-200 px-3 py-2 text-slate-500">Rp</span>
+                    <input type="text" required inputMode="numeric" value={rupiahPerPoint ? Number(rupiahPerPoint).toLocaleString('id-ID') : ''} onChange={(event) => setRupiahPerPoint(event.target.value.replace(/\D/g, ''))} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none" aria-label="Nilai rupiah per poin" />
+                  </span>
+                </label>
+                <button type="submit" disabled={settingsSaving} className="min-h-10 border border-[#21AC3A] bg-[#21AC3A] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1d9732] disabled:cursor-not-allowed disabled:opacity-60">{settingsSaving ? 'Menyimpan...' : 'Simpan aturan'}</button>
+              </form>
+            ) : (
+              <p className="mt-3 text-sm font-semibold text-slate-800">Saat ini: Rp {Number(rupiahPerPoint).toLocaleString('id-ID')} = 1 poin <span className="font-normal text-slate-500">(hanya pemilik bisnis yang dapat mengubah aturan ini)</span></p>
+            )}
+          </div>
+        </div>
+      </section>
+
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Daftar hadiah loyalitas</h2>
@@ -1517,7 +1605,7 @@ function LoyaltyPanel({ branchId }: { branchId: string | undefined }) {
           </div>
         </div>
       </div>
-      <p className="border-l-4 border-[#0875d1] bg-blue-50 px-3 py-3 text-sm text-slate-700">Catatan: koreksi dan penukaran poin tercatat di profil pelanggan. Poin otomatis dari transaksi dan penerapan diskon hadiah memerlukan integrasi POS.</p>
+      <p className="border-l-4 border-[#0875d1] bg-blue-50 px-3 py-3 text-sm text-slate-700">Koreksi, perolehan otomatis, dan penukaran poin tercatat di profil pelanggan. Pastikan hadiah aktif sesuai dengan kebijakan poin bisnis Anda.</p>
 
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">

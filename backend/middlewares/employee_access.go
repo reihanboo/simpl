@@ -206,6 +206,7 @@ func employeeRoleAllows(role, method, route string) bool {
 	case "cashier":
 		return (route == "/api/branches/:id/products" && method == http.MethodGet) ||
 			(route == "/api/branches/:id/orders" && method == http.MethodPost) ||
+			(route == "/api/branches/:id/customers/:customer_id/vouchers" && method == http.MethodGet) ||
 			(route == "/api/branches/:id/reports/sales" && method == http.MethodGet) ||
 			(route == "/api/branches/:id/customers" && (method == http.MethodGet || method == http.MethodPost))
 	case "warehouse_staff":
@@ -216,6 +217,7 @@ func employeeRoleAllows(role, method, route string) bool {
 			((route == "/api/branches/:id/forecast" || route == "/api/branches/:id/forecast/series") && method == http.MethodGet)
 	case "manager":
 		return strings.HasPrefix(route, "/api/branches/:id/customers") ||
+			(route == "/api/branches/:id/loyalty-settings" && method == http.MethodGet) ||
 			strings.HasPrefix(route, "/api/branches/:id/loyalty-rewards") ||
 			(route == "/api/branches/:id/employees" && (method == http.MethodGet || method == http.MethodPost)) ||
 			(route == "/api/branches/:id/employees/:employee_id" && (method == http.MethodPut || method == http.MethodDelete)) ||

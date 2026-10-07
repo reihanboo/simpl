@@ -29,6 +29,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle } from 'lucide-react';
 import { normalizeEmployeeRole } from '../../utils/employee-role';
+import { loadMidtransSnap } from '../../utils/midtrans';
 
 const ACTIVE_BUSINESS_STORAGE_KEY = 'activeBusinessId';
 
@@ -380,9 +381,10 @@ export default function DashboardLayout() {
     return () => controller.abort();
   }, [branchId, organizations, navigate, location.pathname]);
 
-  const handlePayNow = (snapToken: string) => {
-    if (window.snap) {
-      window.snap.pay(snapToken, {
+  const handlePayNow = async (snapToken: string) => {
+    try {
+      const snap = await loadMidtransSnap();
+      snap.pay(snapToken, {
         onSuccess: function () {
           window.location.reload();
         },
@@ -392,6 +394,8 @@ export default function DashboardLayout() {
           console.log('Payment popup closed');
         }
       });
+    } catch (error) {
+      console.error('Failed to load Midtrans Snap', error);
     }
   };
 

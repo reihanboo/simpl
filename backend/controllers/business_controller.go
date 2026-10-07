@@ -72,9 +72,10 @@ func CreateBusiness(c *gin.Context) {
 
 	// Create Business record
 	business := models.Business{
-		OwnerID: userID.(uuid.UUID),
-		Name:    input.Name,
-		Address: input.Address,
+		OwnerID:               userID.(uuid.UUID),
+		Name:                  input.Name,
+		Address:               input.Address,
+		LoyaltyRupiahPerPoint: 1000,
 	}
 
 	if err := config.DB.Create(&business).Error; err != nil {

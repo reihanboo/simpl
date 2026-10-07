@@ -10,10 +10,14 @@
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⠤⠤⠴⣄⡸⠤⣄⠴⠤⠴⠄⠼⠀⠀⠀⠀⠀⠀⠀⠀
 </pre>
 
+## Developer onboarding
+
+New to the codebase? Start with the [Developer Onboarding Guide](DEVELOPER_ONBOARDING.md) for architecture, setup, validation, and pull request workflow.
+
 ## Development & Running
 
 ### Local Development (without Docker)
-In root, run `npm i` then run `npm run dev` oki oki.
+See the [Developer Onboarding Guide](DEVELOPER_ONBOARDING.md) for prerequisites, PostgreSQL configuration, and dependency installation. Once the frontend and root dependencies are installed and the backend database environment is configured, run `npm run dev` from the repository root to start both services.
 
 ### Docker Development (with Hot Reloading)
 ```bash

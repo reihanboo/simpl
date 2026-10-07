@@ -98,12 +98,31 @@ func ConnectDB() {
 		&models.LoyaltyReward{},
 		&models.LoyaltyRewardCustomer{},
 		&models.LoyaltyPointLog{},
+		&models.LoyaltyVoucher{},
 		&models.Order{},
 		&models.OrderItem{},
 		&models.AIChatLog{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to auto migrate: %v", err)
+	}
+
+	if err := db.Exec(`
+		INSERT INTO loyalty_vouchers (
+			business_id, customer_id, reward_id, redemption_log_id, reward_name,
+			discount_type, discount_amount_idr, discount_percentage,
+			max_discount_amount_idr, created_at
+		)
+		SELECT business_id, customer_id, reward_id, id, reward_name,
+			discount_type, discount_amount_idr, discount_percentage,
+			max_discount_amount_idr, created_at
+		FROM loyalty_point_logs
+		WHERE type = 'redeemed'
+		  AND business_id IS NOT NULL
+		  AND reward_id IS NOT NULL
+		ON CONFLICT (redemption_log_id) DO NOTHING
+	`).Error; err != nil {
+		log.Fatalf("Failed to backfill loyalty vouchers: %v", err)
 	}
 
 	// Older installations may still have the pre-rename amount column.

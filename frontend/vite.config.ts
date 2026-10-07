@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: true,
       },
-      allowedHosts: ['e209-2404-c0-d401-4baa-102d-6476-2db7-4a91.ngrok-free.app'],
+      allowedHosts: ['95fb-116-90-214-76.ngrok-free.app'],
       proxy: {
         '/api': {
           target: 'http://backend:8080',

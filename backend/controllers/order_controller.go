@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type OrderItemInput struct {
@@ -25,10 +26,22 @@ type CreateOrderInput struct {
 	Items         []OrderItemInput `json:"items" binding:"required,min=1"`
 	PaymentMethod string           `json:"payment_method" binding:"required"`
 	CustomerID    *uuid.UUID       `json:"customer_id"`
+	VoucherID     *uuid.UUID       `json:"voucher_id"`
 }
 
 var supportedPaymentMethods = map[string]struct{}{
 	"cash": {}, "qris": {}, "debit": {}, "credit": {}, "transfer": {}, "ewallet": {},
+}
+
+var errInvalidOrderQuantity = errors.New("order item quantity must be positive")
+
+func validateOrderQuantities(items []OrderItemInput) error {
+	for _, item := range items {
+		if item.Qty <= 0 {
+			return errInvalidOrderQuantity
+		}
+	}
+	return nil
 }
 
 func CreateOrder(c *gin.Context) {
@@ -65,9 +78,17 @@ func CreateOrder(c *gin.Context) {
 		utils.RespondError(c, http.StatusBadRequest, "Data input tidak valid: "+err.Error())
 		return
 	}
+	if err := validateOrderQuantities(input.Items); err != nil {
+		utils.RespondError(c, http.StatusBadRequest, "Jumlah setiap produk harus minimal 1.")
+		return
+	}
 	input.PaymentMethod = strings.ToLower(strings.TrimSpace(input.PaymentMethod))
 	if _, ok := supportedPaymentMethods[input.PaymentMethod]; !ok {
 		utils.RespondError(c, http.StatusBadRequest, "Metode pembayaran tidak didukung")
+		return
+	}
+	if input.VoucherID != nil && input.CustomerID == nil {
+		utils.RespondError(c, http.StatusBadRequest, "Pilih pelanggan untuk menggunakan voucher.")
 		return
 	}
 
@@ -75,15 +96,6 @@ func CreateOrder(c *gin.Context) {
 	if tx.Error != nil {
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memulai transaksi")
 		return
-	}
-
-	if input.CustomerID != nil {
-		var customer models.Customer
-		if err := tx.Where("id = ? AND business_id = ?", *input.CustomerID, branch.BusinessID).First(&customer).Error; err != nil {
-			tx.Rollback()
-			utils.RespondError(c, http.StatusBadRequest, "Pelanggan tidak ditemukan")
-			return
-		}
 	}
 
 	// 1. Create the base Order record
@@ -98,6 +110,7 @@ func CreateOrder(c *gin.Context) {
 		PaymentMethod:     input.PaymentMethod,
 		PaymentStatus:     "paid",
 		CustomerID:        input.CustomerID,
+		LoyaltyVoucherID:  input.VoucherID,
 	}
 
 	if input.CustomerID != nil {
@@ -125,9 +138,28 @@ func CreateOrder(c *gin.Context) {
 	for _, itemInput := range input.Items {
 		// Fetch product to get selling price
 		var product models.Product
-		if err := tx.Where("id = ?", itemInput.ProductID).First(&product).Error; err != nil {
+		if err := tx.Where("id = ? AND business_id = ?", itemInput.ProductID, branch.BusinessID).First(&product).Error; err != nil {
 			tx.Rollback()
-			utils.RespondError(c, http.StatusNotFound, "Produk tidak ditemukan: "+itemInput.ProductID.String())
+			utils.RespondError(c, http.StatusNotFound, "Produk tidak ditemukan pada bisnis ini: "+itemInput.ProductID.String())
+			return
+		}
+
+		stockResult := tx.Model(&models.BranchInventory{}).
+			Where("branch_id = ? AND product_id = ? AND current_stock >= ?", branch.ID, product.ID, itemInput.Qty).
+			Update("current_stock", gorm.Expr("current_stock - ?", itemInput.Qty))
+		if stockResult.Error != nil {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui stok produk.")
+			return
+		}
+		if stockResult.RowsAffected == 0 {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusConflict, fmt.Sprintf("Stok produk %s tidak mencukupi untuk jumlah %d.", product.Name, itemInput.Qty))
+			return
+		}
+		if stockResult.RowsAffected != 1 {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusInternalServerError, "Data stok produk pada cabang tidak valid.")
 			return
 		}
 
@@ -148,21 +180,6 @@ func CreateOrder(c *gin.Context) {
 			return
 		}
 
-		// Decrease inventory
-		var branchInventory models.BranchInventory
-		if err := tx.Where("branch_id = ? AND product_id = ?", branch.ID, product.ID).First(&branchInventory).Error; err != nil {
-			tx.Rollback()
-			utils.RespondError(c, http.StatusInternalServerError, "Gagal mendapatkan stok produk")
-			return
-		}
-
-		branchInventory.CurrentStock -= itemInput.Qty
-		if err := tx.Save(&branchInventory).Error; err != nil {
-			tx.Rollback()
-			utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui stok produk")
-			return
-		}
-
 		// Record stock movement
 		movement := models.StockMovement{
 			BranchID:  branch.ID,
@@ -178,18 +195,120 @@ func CreateOrder(c *gin.Context) {
 		}
 	}
 
-	// Update total amount on the order
-	order.TotalAmountIDR = totalAmount
+	var appliedVoucher models.LoyaltyVoucher
+	if input.VoucherID != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND business_id = ? AND customer_id = ? AND used_at IS NULL", *input.VoucherID, branch.BusinessID, *input.CustomerID).
+			First(&appliedVoucher).Error; err != nil {
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				utils.RespondError(c, http.StatusConflict, "Voucher tidak tersedia untuk pelanggan ini atau sudah digunakan.")
+			} else {
+				utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi voucher pelanggan.")
+			}
+			return
+		}
+		discount, err := calculateVoucherDiscount(totalAmount, appliedVoucher.DiscountType, appliedVoucher.DiscountAmountIDR, appliedVoucher.DiscountPercentage, appliedVoucher.MaxDiscountAmountIDR)
+		if err != nil {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusConflict, "Voucher pelanggan memiliki aturan diskon yang tidak valid.")
+			return
+		}
+		order.DiscountAmountIDR = discount
+	}
+	order.TotalAmountIDR = totalAmount - order.DiscountAmountIDR
 	if err := tx.Save(&order).Error; err != nil {
 		tx.Rollback()
 		utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui total transaksi")
 		return
 	}
 
-	tx.Commit()
+	if input.VoucherID != nil {
+		usedAt := time.Now()
+		result := tx.Model(&models.LoyaltyVoucher{}).
+			Where("id = ? AND used_at IS NULL", appliedVoucher.ID).
+			Updates(map[string]interface{}{"used_at": usedAt, "order_id": order.ID})
+		if result.Error != nil {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusInternalServerError, "Gagal menandai voucher sebagai digunakan.")
+			return
+		}
+		if result.RowsAffected == 0 {
+			tx.Rollback()
+			utils.RespondError(c, http.StatusConflict, "Voucher ini sudah digunakan.")
+			return
+		}
+	}
+
+	loyaltyPointsEarned := 0
+	if input.CustomerID != nil {
+		var customer models.Customer
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ? AND business_id = ?", *input.CustomerID, branch.BusinessID).First(&customer).Error; err != nil {
+			tx.Rollback()
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				utils.RespondError(c, http.StatusNotFound, "Pelanggan tidak ditemukan pada bisnis ini.")
+			} else {
+				utils.RespondError(c, http.StatusInternalServerError, "Gagal memverifikasi pelanggan.")
+			}
+			return
+		}
+
+		if customer.MembershipActive {
+			var business models.Business
+			if err := tx.Select("id", "loyalty_rupiah_per_point").First(&business, "id = ?", branch.BusinessID).Error; err != nil {
+				tx.Rollback()
+				utils.RespondError(c, http.StatusInternalServerError, "Gagal mengambil pengaturan poin loyalitas.")
+				return
+			}
+			loyaltyPointsEarned, err = calculateEarnedLoyaltyPoints(order.TotalAmountIDR, business.LoyaltyRupiahPerPoint)
+			if err != nil {
+				tx.Rollback()
+				utils.RespondError(c, http.StatusConflict, "Jumlah poin transaksi melebihi batas yang didukung.")
+				return
+			}
+			if loyaltyPointsEarned > 0 {
+				newBalance, err := calculateLoyaltyBalance(customer.LoyaltyPoints, loyaltyPointsEarned)
+				if err != nil {
+					tx.Rollback()
+					utils.RespondError(c, http.StatusConflict, "Saldo poin pelanggan akan melebihi batas yang didukung.")
+					return
+				}
+				if err := tx.Model(&customer).Update("loyalty_points", newBalance).Error; err != nil {
+					tx.Rollback()
+					utils.RespondError(c, http.StatusInternalServerError, "Gagal memperbarui saldo poin pelanggan.")
+					return
+				}
+				businessID := branch.BusinessID
+				orderID := order.ID
+				balanceAfter := newBalance
+				entry := models.LoyaltyPointLog{
+					BusinessID:         &businessID,
+					CustomerID:         customer.ID,
+					OrderID:            &orderID,
+					PointsChanged:      loyaltyPointsEarned,
+					PointsBalanceAfter: &balanceAfter,
+					Reason:             "Poin dari transaksi " + order.OrderNumber,
+					Type:               "earned",
+					RequestID:          &orderID,
+				}
+				if err := tx.Create(&entry).Error; err != nil {
+					tx.Rollback()
+					utils.RespondError(c, http.StatusInternalServerError, "Gagal mencatat perolehan poin pelanggan.")
+					return
+				}
+			}
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		utils.RespondError(c, http.StatusInternalServerError, "Gagal menyelesaikan transaksi.")
+		return
+	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "Transaksi berhasil diproses",
-		"order":   order,
+		"message":               "Transaksi berhasil diproses",
+		"order":                 order,
+		"loyalty_points_earned": loyaltyPointsEarned,
 	})
 }

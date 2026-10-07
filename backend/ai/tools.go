@@ -114,7 +114,7 @@ func NewServer(scope Scope) *mcp.Server {
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_customer_overview",
-		Description: "Jumlah pelanggan terdaftar, pelanggan baru dalam periode tertentu, dan pelanggan dengan belanja terbesar.",
+		Description: "Jumlah pelanggan terdaftar, pelanggan baru dalam periode tertentu, dan 5 pelanggan dengan belanja seumur hidup terbesar. Total belanja dan pesanan hanya menghitung transaksi lunas, sama seperti halaman pelanggan; periode hanya berlaku untuk pelanggan baru.",
 		Annotations: readOnly("Ringkasan pelanggan"),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in customerOverviewArgs) (*mcp.CallToolResult, customerOverviewOutput, error) {
 		out, err := scope.customerOverview(in)
@@ -127,6 +127,51 @@ func NewServer(scope Scope) *mcp.Server {
 		Annotations: readOnly("Rekomendasi pesan ulang"),
 	}, func(_ context.Context, _ *mcp.CallToolRequest, in restockArgs) (*mcp.CallToolResult, restockOutput, error) {
 		out, err := scope.restockRecommendations(in)
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_sales_trend",
+		Description: "Laporan tren penjualan harian untuk cabang ini, termasuk pendapatan, transaksi, diskon, dan jumlah item selama 1-90 hari.",
+		Annotations: readOnly("Tren penjualan harian"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in salesTrendArgs) (*mcp.CallToolResult, salesTrendOutput, error) {
+		out, err := scope.salesTrend(in)
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_payment_method_breakdown",
+		Description: "Laporan jumlah transaksi, pendapatan, diskon, dan kontribusi persentase tiap metode pembayaran selama periode tertentu.",
+		Annotations: readOnly("Laporan metode pembayaran"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in paymentBreakdownArgs) (*mcp.CallToolResult, paymentBreakdownOutput, error) {
+		out, err := scope.paymentMethodBreakdown(in)
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_inventory_valuation",
+		Description: "Ringkasan nilai persediaan cabang berdasarkan harga modal dan harga jual, serta jumlah produk aman, menipis, atau habis.",
+		Annotations: readOnly("Nilai persediaan"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, inventoryValuationOutput, error) {
+		out, err := scope.inventoryValuation()
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_employee_overview",
+		Description: "Ringkasan pegawai cabang berdasarkan status dan peran, tanpa menampilkan informasi kontak pribadi.",
+		Annotations: readOnly("Ringkasan pegawai"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, employeeOverviewOutput, error) {
+		out, err := scope.employeeOverview()
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_attendance_report",
+		Description: "Laporan presensi 1-90 hari terakhir: tren harian, jumlah hadir/terlambat, clock-out, dan pegawai dengan catatan kehadiran terbanyak.",
+		Annotations: readOnly("Laporan presensi"),
+	}, func(_ context.Context, _ *mcp.CallToolRequest, in attendanceReportArgs) (*mcp.CallToolResult, attendanceReportOutput, error) {
+		out, err := scope.attendanceReport(in)
 		return nil, out, err
 	})
 
@@ -214,7 +259,7 @@ type productSales struct {
 	Name       string `json:"name"`
 	SKU        string `json:"sku"`
 	QtySold    int    `json:"qty_sold"`
-	RevenueIDR int64  `json:"revenue_idr"`
+	RevenueIDR int64  `gorm:"column:revenue_idr" json:"revenue_idr"`
 }
 
 type topProductsOutput struct {
@@ -317,7 +362,7 @@ type productStockArgs struct {
 type productStockItem struct {
 	Name              string `json:"name"`
 	SKU               string `json:"sku"`
-	SellingPriceIDR   int64  `json:"selling_price_idr"`
+	SellingPriceIDR   int64  `gorm:"column:selling_price_idr" json:"selling_price_idr"`
 	CurrentStock      int    `json:"current_stock"`
 	LowStockThreshold int    `json:"low_stock_threshold"`
 }
@@ -361,8 +406,8 @@ type customerOverviewArgs struct {
 
 type customerSpend struct {
 	Name          string `json:"name"`
-	TotalSpendIDR int64  `json:"total_spend_idr"`
-	Orders        int    `json:"orders"`
+	TotalSpendIDR int64  `gorm:"column:total_spend_idr" json:"total_spend_idr"`
+	Orders        int    `gorm:"column:orders" json:"orders"`
 }
 
 type customerOverviewOutput struct {
@@ -397,7 +442,9 @@ func (s Scope) customerOverview(in customerOverviewArgs) (customerOverviewOutput
 		       COALESCE(SUM(o.total_amount_idr), 0)::bigint AS total_spend_idr,
 		       COUNT(o.id)::int AS orders
 		FROM customers c
-		LEFT JOIN orders o ON o.customer_id = c.id AND o.payment_status <> 'refunded'
+		LEFT JOIN orders o ON o.customer_id = c.id
+		  AND o.business_id = c.business_id
+		  AND LOWER(o.payment_status) = 'paid'
 		WHERE c.business_id = ? AND c.deleted_at IS NULL
 		GROUP BY c.id, c.name
 		ORDER BY total_spend_idr DESC
