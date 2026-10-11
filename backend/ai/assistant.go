@@ -35,7 +35,7 @@ type Answer struct {
 
 // Ask runs the DeepSeek tool-calling loop against an in-process MCP server
 // bound to scope, and returns the natural-language reply.
-func Ask(ctx context.Context, scope Scope, history []Message, question string) (Answer, error) {
+func Ask(ctx context.Context, scope Scope, history []Message, question string, discussionMode bool) (Answer, error) {
 	client := newDeepSeekClient()
 	if client.apiKey == "" {
 		return Answer{}, ErrNotConfigured
@@ -64,7 +64,7 @@ func Ask(ctx context.Context, scope Scope, history []Message, question string) (
 	tools := toChatTools(toolsResult.Tools)
 
 	messages := make([]chatMessage, 0, len(history)+2)
-	messages = append(messages, chatMessage{Role: "system", Content: systemPrompt(scope)})
+	messages = append(messages, chatMessage{Role: "system", Content: systemPrompt(scope, discussionMode)})
 	for _, message := range history {
 		if message.Content == "" || (message.Role != "user" && message.Role != "assistant") {
 			continue
@@ -167,11 +167,15 @@ func toChatTools(tools []*mcp.Tool) []chatTool {
 	return converted
 }
 
-func systemPrompt(scope Scope) string {
-	return "Anda adalah ABAI, asisten operasional untuk cabang \"" + scope.BranchName + "\" pada platform SIMPL. " +
+func systemPrompt(scope Scope, discussionMode bool) string {
+	prompt := "Anda adalah ABAI, asisten operasional untuk cabang \"" + scope.BranchName + "\" pada platform SIMPL. " +
 		"Jawab hanya berdasarkan data yang diperoleh lewat tool yang tersedia, dan jangan mengarang angka. " +
 		"Panggil tool yang relevan sebelum menjawab. Semua data sudah dibatasi ke cabang ini; anda tidak dapat mengakses cabang atau bisnis lain. " +
 		"Gunakan bahasa Indonesia yang ringkas dan profesional, format nominal sebagai Rupiah (contoh: Rp 1.250.000), dan jangan memakai emoji. " +
 		"Saat menyajikan beberapa baris data (misalnya daftar produk), gunakan tabel Markdown yang rapi agar mudah dibaca. " +
 		"Jika suatu informasi tidak tersedia lewat tool, sampaikan dengan jujur bahwa data tersebut belum tersedia."
+	if discussionMode {
+		prompt += " Dalam mode diskusi, jadilah mitra berpikir: ajukan pertanyaan klarifikasi bila tujuan belum jelas, jelaskan opsi dan dampaknya secara ringkas, serta bantu pengguna mengeksplorasi langkah berikutnya. Tetap gunakan tool untuk menjawab pertanyaan tentang data operasional."
+	}
+	return prompt
 }

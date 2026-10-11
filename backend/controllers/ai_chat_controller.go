@@ -29,8 +29,9 @@ type aiChatHistoryMessage struct {
 }
 
 type aiChatRequest struct {
-	Message string                 `json:"message" binding:"required,max=1000"`
-	History []aiChatHistoryMessage `json:"history" binding:"omitempty,dive"`
+	Message        string                 `json:"message" binding:"required,max=1000"`
+	History        []aiChatHistoryMessage `json:"history" binding:"omitempty,dive"`
+	DiscussionMode bool                   `json:"discussion_mode"`
 }
 
 type aiChatResponse struct {
@@ -112,7 +113,7 @@ func PostAIChat(c *gin.Context) {
 		BusinessID: branch.BusinessID,
 		BranchID:   branch.ID,
 		BranchName: branch.Name,
-	}, history, payload.Message)
+	}, history, payload.Message, payload.DiscussionMode)
 	if err != nil {
 		if errors.Is(err, ai.ErrNotConfigured) {
 			utils.RespondError(c, http.StatusServiceUnavailable, "Asisten AI belum dikonfigurasi.")
