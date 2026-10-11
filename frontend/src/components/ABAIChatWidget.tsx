@@ -5,7 +5,7 @@ import {
   motion,
   useMotionValue,
 } from 'framer-motion';
-import { ArrowRight, ChevronUp, Minus, Send, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronUp, MessageCircle, Minus, Send, Sparkles } from 'lucide-react';
 import { Markdown } from './Markdown';
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
@@ -21,6 +21,7 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatSending, setIsChatSending] = useState(false);
+  const [isDiscussionMode, setIsDiscussionMode] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [launcherPosition, setLauncherPosition] = useState({ x: 0, y: 0 });
@@ -90,7 +91,11 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: content, history }),
+        body: JSON.stringify({
+          message: content,
+          history,
+          discussion_mode: isDiscussionMode,
+        }),
       });
 
       if (!res.ok) {
@@ -236,6 +241,17 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
                   placeholder="Tanya ABAI tentang bisnis Anda..."
                   className="min-w-0 flex-1 bg-transparent py-1 text-sm text-slate-800 outline-none placeholder:text-slate-400"
                 />
+                <button
+                  type="button"
+                  aria-pressed={isDiscussionMode}
+                  aria-label="Mode diskusi"
+                  title="Mode diskusi"
+                  onClick={() => setIsDiscussionMode((enabled) => !enabled)}
+                  className={`flex h-8 shrink-0 items-center gap-1.5 px-2 text-xs transition-colors ${isDiscussionMode ? 'bg-[#21AC3A]/10 text-[#16852b]' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  <span>Diskusi</span>
+                </button>
                 <button
                   type="submit"
                   aria-label="Kirim pesan"
