@@ -11,6 +11,33 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+func TestParseClarificationReply(t *testing.T) {
+	t.Run("parses question and choices", func(t *testing.T) {
+		reply, options := parseClarificationReply(`ABAI_CLARIFICATION: {"question":"Periode mana?","options":["Hari ini","Bulan ini"]}`)
+		if reply != "Periode mana?" {
+			t.Fatalf("reply = %q, want clarification question", reply)
+		}
+		if len(options) != 2 || options[0] != "Hari ini" || options[1] != "Bulan ini" {
+			t.Fatalf("options = %#v, want [Hari ini Bulan ini]", options)
+		}
+	})
+
+	t.Run("keeps ordinary replies unchanged", func(t *testing.T) {
+		reply, options := parseClarificationReply("Jawab biasa")
+		if reply != "Jawab biasa" || len(options) != 0 {
+			t.Fatalf("parseClarificationReply() = (%q, %#v), want ordinary reply without options", reply, options)
+		}
+	})
+
+	t.Run("rejects invalid choice counts", func(t *testing.T) {
+		input := `ABAI_CLARIFICATION: {"question":"Periode mana?","options":["Hari ini"]}`
+		reply, options := parseClarificationReply(input)
+		if reply != input || len(options) != 0 {
+			t.Fatalf("parseClarificationReply() = (%q, %#v), want unparsed input", reply, options)
+		}
+	})
+}
+
 func TestRawQueryMoneyFieldsMatchSQLAliases(t *testing.T) {
 	tests := []struct {
 		name   string

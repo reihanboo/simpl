@@ -29,8 +29,9 @@ type ToolInvocation struct {
 
 // Answer is the assistant's reply plus the tool calls it used.
 type Answer struct {
-	Reply     string           `json:"reply"`
-	ToolCalls []ToolInvocation `json:"tool_calls,omitempty"`
+	Reply                string           `json:"reply"`
+	ToolCalls            []ToolInvocation `json:"tool_calls,omitempty"`
+	ClarificationOptions []string         `json:"clarification_options,omitempty"`
 }
 
 // Ask runs the DeepSeek tool-calling loop against an in-process MCP server
@@ -81,7 +82,7 @@ func Ask(ctx context.Context, scope Scope, history []Message, question string, d
 		}
 
 		if len(reply.ToolCalls) == 0 {
-			answer.Reply = strings.TrimSpace(reply.Content)
+			answer.Reply, answer.ClarificationOptions = parseClarificationReply(reply.Content)
 			return answer, nil
 		}
 
@@ -104,7 +105,7 @@ func Ask(ctx context.Context, scope Scope, history []Message, question string, d
 	if err != nil {
 		return Answer{}, err
 	}
-	answer.Reply = strings.TrimSpace(reply.Content)
+	answer.Reply, answer.ClarificationOptions = parseClarificationReply(reply.Content)
 	return answer, nil
 }
 
@@ -167,6 +168,34 @@ func toChatTools(tools []*mcp.Tool) []chatTool {
 	return converted
 }
 
+func parseClarificationReply(reply string) (string, []string) {
+	trimmed := strings.TrimSpace(reply)
+	const marker = "ABAI_CLARIFICATION:"
+	if !strings.HasPrefix(trimmed, marker) {
+		return trimmed, nil
+	}
+
+	var clarification struct {
+		Question string   `json:"question"`
+		Options  []string `json:"options"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(trimmed, marker))), &clarification); err != nil {
+		return trimmed, nil
+	}
+
+	question := strings.TrimSpace(clarification.Question)
+	options := make([]string, 0, len(clarification.Options))
+	for _, option := range clarification.Options {
+		if option = strings.TrimSpace(option); option != "" {
+			options = append(options, option)
+		}
+	}
+	if question == "" || len(options) < 2 || len(options) > 4 {
+		return trimmed, nil
+	}
+	return question, options
+}
+
 func systemPrompt(scope Scope, discussionMode bool) string {
 	prompt := "Anda adalah ABAI, asisten operasional untuk cabang \"" + scope.BranchName + "\" pada platform SIMPL. " +
 		"Jawab hanya berdasarkan data yang diperoleh lewat tool yang tersedia, dan jangan mengarang angka. " +
@@ -175,7 +204,11 @@ func systemPrompt(scope Scope, discussionMode bool) string {
 		"Saat menyajikan beberapa baris data (misalnya daftar produk), gunakan tabel Markdown yang rapi agar mudah dibaca. " +
 		"Jika suatu informasi tidak tersedia lewat tool, sampaikan dengan jujur bahwa data tersebut belum tersedia."
 	if discussionMode {
-		prompt += " Dalam mode diskusi, jadilah mitra berpikir: ajukan pertanyaan klarifikasi bila tujuan belum jelas, jelaskan opsi dan dampaknya secara ringkas, serta bantu pengguna mengeksplorasi langkah berikutnya. Tetap gunakan tool untuk menjawab pertanyaan tentang data operasional."
+		prompt += " Dalam mode diskusi, jadilah mitra bisnis yang suportif tetapi kritis, bukan sekadar menyetujui ide pengguna. " +
+			"Untuk keputusan atau rencana, timbang potensi manfaat/hasil dan risiko, biaya, serta trade-off secara seimbang berdasarkan data cabang yang diperoleh lewat tool dan konteks dari pengguna. " +
+			"Gunakan angka dan periode konkret bila tersedia; bedakan fakta dari asumsi, jangan mengarang margin, biaya, permintaan, atau hubungan sebab-akibat. " +
+			"Sampaikan kekurangan data dan ketidakpastian dengan jelas. Berikan penilaian atau rekomendasi yang beralasan, termasuk kondisi yang dapat mengubah rekomendasi dan langkah rendah-risiko untuk menguji ide bila relevan. " +
+			"Jika maksud pengguna cukup ambigu sehingga jawaban yang bermanfaat belum dapat diberikan, jangan menebak: ajukan satu pertanyaan klarifikasi singkat. Berikan 2 sampai 4 opsi konkret sebagai pilihan, lalu balas hanya dengan format persis ABAI_CLARIFICATION: {\"question\":\"pertanyaan\",\"options\":[\"opsi 1\",\"opsi 2\"]}. Jangan masukkan opsi untuk mengetik jawaban sendiri; antarmuka akan menambahkannya. Jangan gunakan format klarifikasi jika maksudnya sudah cukup jelas. Setelah pengguna memilih atau mengetik jawaban, lanjutkan percakapan dengan konteks tersebut. Tetap gunakan tool untuk menjawab pertanyaan tentang data operasional."
 	}
 	return prompt
 }

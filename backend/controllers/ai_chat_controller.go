@@ -35,8 +35,9 @@ type aiChatRequest struct {
 }
 
 type aiChatResponse struct {
-	Reply     string              `json:"reply"`
-	ToolCalls []ai.ToolInvocation `json:"tool_calls,omitempty"`
+	Reply                string              `json:"reply"`
+	ToolCalls            []ai.ToolInvocation `json:"tool_calls,omitempty"`
+	ClarificationOptions []string            `json:"clarification_options,omitempty"`
 }
 
 // PostAIChat answers a branch operator's question using DeepSeek with read-only
@@ -126,7 +127,11 @@ func PostAIChat(c *gin.Context) {
 
 	logAIChat(branch, userID, payload.Message, answer.ToolCalls)
 
-	c.JSON(http.StatusOK, aiChatResponse{Reply: answer.Reply, ToolCalls: answer.ToolCalls})
+	c.JSON(http.StatusOK, aiChatResponse{
+		Reply:                answer.Reply,
+		ToolCalls:            answer.ToolCalls,
+		ClarificationOptions: answer.ClarificationOptions,
+	})
 }
 
 func logAIChat(branch models.Branch, userID uuid.UUID, query string, calls []ai.ToolInvocation) {

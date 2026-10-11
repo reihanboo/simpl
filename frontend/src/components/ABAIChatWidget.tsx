@@ -8,7 +8,12 @@ import {
 import { ArrowRight, ChevronUp, MessageCircle, Minus, Send, Sparkles } from 'lucide-react';
 import { Markdown } from './Markdown';
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  clarificationOptions?: string[];
+  clarificationAnswered?: boolean;
+};
 
 const suggestedQuestions = [
   'Apa yang perlu saya pesan ulang?',
@@ -16,12 +21,46 @@ const suggestedQuestions = [
   'Produk apa yang paling laris?',
 ];
 
+function parseClarificationReply(reply: string) {
+  const marker = 'ABAI_CLARIFICATION:';
+  const markerIndex = reply.indexOf(marker);
+  if (markerIndex < 0) return null;
+
+  const jsonText = reply
+    .slice(markerIndex + marker.length)
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  try {
+    const clarification = JSON.parse(jsonText) as {
+      question?: unknown;
+      options?: unknown;
+    };
+    if (typeof clarification.question !== 'string' || !Array.isArray(clarification.options)) {
+      return null;
+    }
+
+    const question = clarification.question.trim();
+    const options = clarification.options
+      .filter((option): option is string => typeof option === 'string')
+      .map((option) => option.trim())
+      .filter(Boolean);
+    if (!question || options.length < 2 || options.length > 4) return null;
+    return { question, options };
+  } catch {
+    return null;
+  }
+}
+
 export default function ABAIChatWidget({ branchId }: { branchId: string }) {
   const [isOpen, setIsOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatSending, setIsChatSending] = useState(false);
   const [isDiscussionMode, setIsDiscussionMode] = useState(false);
+  const [otherClarificationIndex, setOtherClarificationIndex] = useState<number | null>(null);
+  const [otherClarificationAnswer, setOtherClarificationAnswer] = useState('');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [launcherPosition, setLauncherPosition] = useState({ x: 0, y: 0 });
@@ -78,7 +117,7 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
     const content = message.trim();
     if (!content || isChatSending) return;
 
-    const history = chatMessages.slice(-10);
+    const history = chatMessages.slice(-10).map(({ role, content }) => ({ role, content }));
     setChatMessages((messages) => [...messages, { role: 'user', content }]);
     setChatInput('');
     setIsChatSending(true);
@@ -103,8 +142,18 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
         throw new Error(payload?.error || 'ABAI tidak dapat menjawab saat ini.');
       }
 
-      const result = await res.json();
-      setChatMessages((messages) => [...messages, { role: 'assistant', content: result.reply }]);
+      const result: { reply: string; clarification_options?: string[] } = await res.json();
+      const clarification = parseClarificationReply(result.reply);
+      setChatMessages((messages) => [
+        ...messages,
+        {
+          role: 'assistant',
+          content: clarification?.question ?? result.reply,
+          clarificationOptions: result.clarification_options?.length
+            ? result.clarification_options
+            : clarification?.options,
+        },
+      ]);
     } catch (err) {
       const fallback = 'Maaf, ABAI sedang tidak dapat dihubungi. Coba lagi sebentar.';
       setChatMessages((messages) => [
@@ -114,6 +163,18 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
     } finally {
       setIsChatSending(false);
     }
+  };
+
+  const submitClarificationAnswer = (index: number, answer: string) => {
+    const content = answer.trim();
+    if (!content || isChatSending) return;
+
+    setChatMessages((messages) => messages.map((message, messageIndex) => (
+      messageIndex === index ? { ...message, clarificationAnswered: true } : message
+    )));
+    setOtherClarificationIndex(null);
+    setOtherClarificationAnswer('');
+    void sendChatMessage(content);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -186,7 +247,16 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
                     <p>Halo! Saya siap membantu menganalisis penjualan, stok, dan operasional cabang Anda.</p>
                   </div>
                 </div>
-                {chatMessages.map((message, index) => (
+                {chatMessages.map((message, index) => {
+                  const parsedClarification = message.role === 'assistant'
+                    ? parseClarificationReply(message.content)
+                    : null;
+                  const messageContent = parsedClarification?.question ?? message.content;
+                  const clarificationOptions = message.clarificationOptions?.length
+                    ? message.clarificationOptions
+                    : parsedClarification?.options;
+
+                  return (
                   <div key={`${index}-${message.role}`} className={`flex gap-2.5 ${message.role === 'user' ? 'justify-end' : ''}`}>
                     {message.role === 'assistant' && (
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-[#21AC3A] text-white">
@@ -194,10 +264,69 @@ export default function ABAIChatWidget({ branchId }: { branchId: string }) {
                       </span>
                     )}
                     <div className={`max-w-[85%] p-3 text-xs leading-5 ${message.role === 'user' ? 'bg-[#21AC3A] text-white' : 'min-w-0 flex-1 bg-slate-100 text-slate-700'}`}>
-                      {message.role === 'user' ? message.content : <Markdown content={message.content} />}
+                      {message.role === 'user' ? messageContent : (
+                        <>
+                          <Markdown content={messageContent} />
+                          {clarificationOptions && clarificationOptions.length > 0 && !message.clarificationAnswered && (
+                            <div className="mt-3 space-y-2">
+                              <div className="flex flex-wrap gap-1.5">
+                                {clarificationOptions.map((option) => (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    disabled={isChatSending}
+                                    onClick={() => submitClarificationAnswer(index, option)}
+                                    className="border border-slate-300 bg-white px-2.5 py-1.5 text-left text-xs text-slate-700 transition-colors hover:border-[#21AC3A] hover:bg-[#21AC3A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {option}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  disabled={isChatSending}
+                                  onClick={() => {
+                                    setOtherClarificationIndex(index);
+                                    setOtherClarificationAnswer('');
+                                  }}
+                                  className="border border-dashed border-slate-300 px-2.5 py-1.5 text-left text-xs text-slate-600 transition-colors hover:border-[#21AC3A] hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Lainnya (ketik sendiri)
+                                </button>
+                              </div>
+                              {otherClarificationIndex === index && (
+                                <form
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    submitClarificationAnswer(index, otherClarificationAnswer);
+                                  }}
+                                  className="flex items-center gap-1.5"
+                                >
+                                  <input
+                                    autoFocus
+                                    value={otherClarificationAnswer}
+                                    onChange={(event) => setOtherClarificationAnswer(event.target.value)}
+                                    aria-label="Ketik jawaban lain"
+                                    placeholder="Ketik jawaban Anda..."
+                                    className="min-w-0 flex-1 border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-[#21AC3A]"
+                                  />
+                                  <button
+                                    type="submit"
+                                    aria-label="Kirim jawaban"
+                                    disabled={!otherClarificationAnswer.trim() || isChatSending}
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center bg-[#21AC3A] text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                                  >
+                                    <Send className="h-3.5 w-3.5" />
+                                  </button>
+                                </form>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {isChatSending && (
                   <div className="flex gap-2.5">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-[#21AC3A] text-white">
